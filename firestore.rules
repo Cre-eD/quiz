@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin email
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == "creeed22@gmail.com";
+    }
+
+    // Quizzes - admin can read/write, anyone can read
+    match /quizzes/{quizId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Sessions - admin can manage, players can read and update their own data
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || request.auth != null;
+    }
+
+    // Leaderboards - admin can manage
+    match /leaderboards/{leaderboardId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

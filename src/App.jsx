@@ -37,9 +37,24 @@ export default function App() {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [playerAnswer, setPlayerAnswer] = useState(null)
   const [scores, setScores] = useState({})
+  const [streaks, setStreaks] = useState({})
   const [answered, setAnswered] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
   const [gamePhase, setGamePhase] = useState('lobby')
+  const [reactions, setReactions] = useState([])
+  const [badges, setBadges] = useState({})
+
+  // Reaction emojis
+  const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏']
+
+  // Badge definitions
+  const badgeTypes = {
+    firstBlood: { icon: '🎯', name: 'First Blood', desc: 'First correct answer' },
+    speedDemon: { icon: '⚡', name: 'Speed Demon', desc: 'Answered in under 3 seconds' },
+    perfectStreak: { icon: '🔥', name: 'On Fire', desc: 'Got a 4+ answer streak' },
+    comeback: { icon: '🚀', name: 'Comeback', desc: 'Moved up 3+ places' },
+    perfectGame: { icon: '👑', name: 'Perfect Game', desc: 'All answers correct' }
+  }
 
   const showToast = (message, type = "success") => setToast({ message, type })
 
@@ -230,6 +245,9 @@ export default function App() {
           setGamePhase(data.status || 'lobby')
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
+          if (data.streaks) setStreaks(data.streaks)
+          if (data.reactions) setReactions(data.reactions)
+          if (data.badges) setBadges(data.badges)
         }
       })
     }
@@ -256,6 +274,8 @@ export default function App() {
           setGamePhase(newPhase)
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
+          if (data.streaks) setStreaks(data.streaks)
+          if (data.badges) setBadges(data.badges)
 
           if (newPhase === 'question' && gamePhase === 'lobby') {
             setView('play-player')
@@ -324,14 +344,18 @@ export default function App() {
     if (!launchingQuiz) return
     const pin = Math.floor(1000 + Math.random() * 9000).toString()
     const data = {
-      pin, quiz: launchingQuiz, status: 'lobby', players: {}, scores: {},
+      pin, quiz: launchingQuiz, status: 'lobby', players: {}, scores: {}, streaks: {},
       currentQuestion: 0, answers: {}, allowLateJoin: true,
       leaderboardId: selectedLeaderboard || null,
-      leaderboardName: selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null
+      leaderboardName: selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null,
+      reactions: [], badges: {}, correctCounts: {}
     }
     await setDoc(doc(db, 'sessions', pin), data)
     setSession(data)
     setScores({})
+    setStreaks({})
+    setReactions([])
+    setBadges({})
     setCurrentQuestion(0)
     setGamePhase('lobby')
     setLaunchingQuiz(null)
@@ -454,19 +478,74 @@ export default function App() {
     showToast("Session ended")
   }
 
-  const submitAnswer = async (answerIndex) => {
+  const getStreakMultiplier = (streak) => {
+    if (streak >= 4) return 4
+    if (streak >= 3) return 3
+    if (streak >= 2) return 2
+    return 1
+  }
+
+  const sendReaction = async (emoji) => {
+    if (!session?.pin || !user?.uid) return
+    const playerName = session.players?.[user.uid] || 'Player'
+    const reaction = {
+      id: Date.now() + Math.random(),
+      emoji,
+      playerName,
+      timestamp: Date.now()
+    }
+    // Add reaction to array (keep last 20)
+    const currentReactions = session.reactions || []
+    const newReactions = [...currentReactions, reaction].slice(-20)
+    await updateDoc(doc(db, 'sessions', session.pin), { reactions: newReactions })
+  }
+
+  const submitAnswer = async (answerIndex, answerTime = null) => {
     if (answered) return
     setAnswered(true)
     setPlayerAnswer(answerIndex)
 
     const question = session.quiz.questions[currentQuestion]
     const isCorrect = answerIndex === question.correct
-    const points = isCorrect ? 100 : 0
+    const currentStreak = streaks[user.uid] || 0
+    const newStreak = isCorrect ? currentStreak + 1 : 0
+    const multiplier = isCorrect ? getStreakMultiplier(newStreak) : 1
+    const basePoints = isCorrect ? 100 : 0
+    const points = basePoints * multiplier
     const currentScore = scores[user.uid] || 0
+    const currentCorrectCount = session.correctCounts?.[user.uid] || 0
+    const newCorrectCount = isCorrect ? currentCorrectCount + 1 : currentCorrectCount
+
+    // Calculate badges
+    const newBadges = { ...(badges[user.uid] || {}) }
+    const totalQuestions = session.quiz.questions.length
+
+    // First Blood - first correct answer in the game
+    if (isCorrect && currentQuestion === 0 && Object.keys(session.answers || {}).length === 0) {
+      newBadges.firstBlood = true
+    }
+
+    // Speed Demon - answered correctly in under 3 seconds
+    if (isCorrect && answerTime && answerTime < 3000) {
+      newBadges.speedDemon = true
+    }
+
+    // On Fire - 4+ streak
+    if (newStreak >= 4) {
+      newBadges.perfectStreak = true
+    }
+
+    // Perfect Game - all correct (check on last question)
+    if (currentQuestion === totalQuestions - 1 && isCorrect && newCorrectCount === totalQuestions) {
+      newBadges.perfectGame = true
+    }
 
     await updateDoc(doc(db, 'sessions', session.pin), {
       [`answers.${user.uid}`]: answerIndex,
-      [`scores.${user.uid}`]: currentScore + points
+      [`scores.${user.uid}`]: currentScore + points,
+      [`streaks.${user.uid}`]: newStreak,
+      [`correctCounts.${user.uid}`]: newCorrectCount,
+      [`badges.${user.uid}`]: newBadges
     })
   }
 
@@ -493,9 +572,9 @@ export default function App() {
       {view === 'dash' && <DashboardView {...{ user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />}
       {view === 'edit' && <EditView {...{ user, isAdmin, setView, activeQuiz, setActiveQuiz, handleSave, saving, showToast }} />}
       {view === 'host' && <HostLobbyView {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, db, deleteDoc, doc }} />}
-      {view === 'play-host' && <HostPlayView {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, endGame, showQuestionResults, nextQuestion }} />}
+      {view === 'play-host' && <HostPlayView {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }} />}
       {view === 'wait' && <WaitView joinForm={joinForm} />}
-      {view === 'play-player' && <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, leaderboard, answered, setAnswered, submitAnswer, showConfetti, setView, setSession, setJoinForm }} />}
+      {view === 'play-player' && <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, showConfetti, setView, setSession, setJoinForm }} />}
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <Confetti show={showConfetti} />
     </>
@@ -1009,12 +1088,41 @@ function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJ
   )
 }
 
-function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, endGame, showQuestionResults, nextQuestion }) {
+function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }) {
   if (!user?.email || !isAdmin) { setView('home'); return null }
 
   const question = session?.quiz?.questions?.[currentQuestion]
   const answeredCount = Object.keys(session?.answers || {}).length
   const totalPlayers = Object.keys(session?.players || {}).length
+
+  // Floating reactions component
+  const FloatingReactions = () => {
+    const recentReactions = (reactions || []).filter(r => Date.now() - r.timestamp < 5000)
+    return (
+      <div className="fixed top-20 right-4 flex flex-col gap-2 pointer-events-none z-50">
+        {recentReactions.map(r => (
+          <div key={r.id} className="animate-bounce-in bg-slate-800/90 px-3 py-2 rounded-full flex items-center gap-2">
+            <span className="text-2xl">{r.emoji}</span>
+            <span className="text-sm text-slate-300">{r.playerName}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Player badges display
+  const PlayerBadges = ({ uid }) => {
+    const playerBadges = badges?.[uid] || {}
+    const earnedBadges = Object.keys(playerBadges).filter(k => playerBadges[k])
+    if (earnedBadges.length === 0) return null
+    return (
+      <span className="flex gap-1">
+        {earnedBadges.map(badge => (
+          <span key={badge} title={badgeTypes[badge]?.name} className="text-lg">{badgeTypes[badge]?.icon}</span>
+        ))}
+      </span>
+    )
+  }
 
   if (gamePhase === 'final') {
     return (
@@ -1022,15 +1130,22 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
         <Confetti show={true} />
         <h2 className="text-5xl font-black gradient-text mb-8 animate-bounce-in">Final Results!</h2>
         <div className="glass rounded-3xl p-8 w-full max-w-2xl mb-8">
-          {leaderboard.slice(0, 5).map((player, idx) => (
-            <div key={player.uid} className="flex items-center gap-4 p-4 border-b border-slate-800 last:border-0 animate-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
-              <span className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-400 text-black' : idx === 2 ? 'bg-amber-700' : 'bg-slate-800'}`}>
-                {idx === 0 ? <i className="fa fa-crown"></i> : idx + 1}
-              </span>
-              <span className="flex-grow text-left text-xl font-semibold">{player.name}</span>
-              <span className="text-2xl font-bold text-blue-400">{player.score}</span>
-            </div>
-          ))}
+          {leaderboard.slice(0, 5).map((player, idx) => {
+            const playerStreak = streaks?.[player.uid] || 0
+            return (
+              <div key={player.uid} className="flex items-center gap-4 p-4 border-b border-slate-800 last:border-0 animate-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+                <span className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-400 text-black' : idx === 2 ? 'bg-amber-700' : 'bg-slate-800'}`}>
+                  {idx === 0 ? <i className="fa fa-crown"></i> : idx + 1}
+                </span>
+                <span className="flex-grow text-left text-xl font-semibold flex items-center gap-2">
+                  {player.name}
+                  {playerStreak >= 2 && <i className="fa fa-fire text-orange-500" title={`${playerStreak} streak`}></i>}
+                  <PlayerBadges uid={player.uid} />
+                </span>
+                <span className="text-2xl font-bold text-blue-400">{player.score}</span>
+              </div>
+            )
+          })}
         </div>
         <button onClick={endGame} className="btn-gradient px-12 py-4 rounded-2xl font-bold text-xl">
           <i className="fa fa-home mr-2"></i>End Session
@@ -1061,13 +1176,20 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
 
         <div className="glass rounded-3xl p-6 w-full max-w-2xl mb-8">
           <h3 className="text-xl font-bold mb-4"><i className="fa fa-trophy text-yellow-500 mr-2"></i>Leaderboard</h3>
-          {leaderboard.slice(0, 5).map((player, idx) => (
-            <div key={player.uid} className="flex items-center gap-4 p-3 border-b border-slate-800 last:border-0">
-              <span className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold">{idx + 1}</span>
-              <span className="flex-grow text-left font-semibold">{player.name}</span>
-              <span className="font-bold text-blue-400">{player.score} pts</span>
-            </div>
-          ))}
+          {leaderboard.slice(0, 5).map((player, idx) => {
+            const playerStreak = streaks?.[player.uid] || 0
+            return (
+              <div key={player.uid} className="flex items-center gap-4 p-3 border-b border-slate-800 last:border-0">
+                <span className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold">{idx + 1}</span>
+                <span className="flex-grow text-left font-semibold flex items-center gap-2">
+                  {player.name}
+                  {playerStreak >= 2 && <i className="fa fa-fire text-orange-500 animate-pulse" title={`${playerStreak} streak`}></i>}
+                  <PlayerBadges uid={player.uid} />
+                </span>
+                <span className="font-bold text-blue-400">{player.score} pts</span>
+              </div>
+            )
+          })}
         </div>
 
         <button onClick={nextQuestion} className="btn-gradient px-12 py-4 rounded-2xl font-bold text-xl">
@@ -1083,6 +1205,7 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
 
   return (
     <div className="min-h-screen flex flex-col p-6">
+      <FloatingReactions />
       <div className="flex justify-between items-center mb-4">
         <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
         <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
@@ -1137,8 +1260,28 @@ function WaitView({ joinForm }) {
   )
 }
 
-function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, leaderboard, answered, setAnswered, submitAnswer, showConfetti, setView, setSession, setJoinForm }) {
+function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, showConfetti, setView, setSession, setJoinForm }) {
   const question = session?.quiz?.questions?.[currentQuestion]
+  const myStreak = streaks?.[user?.uid] || 0
+  const myBadges = badges?.[user?.uid] || {}
+  const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
+  const [questionStartTime] = useState(Date.now())
+
+  // My badges display
+  const MyBadges = () => {
+    const earnedBadges = Object.keys(myBadges).filter(k => myBadges[k])
+    if (earnedBadges.length === 0) return null
+    return (
+      <div className="flex flex-wrap justify-center gap-2 mb-4">
+        {earnedBadges.map(badge => (
+          <span key={badge} className="bg-slate-800 px-3 py-1 rounded-full text-sm flex items-center gap-1">
+            <span>{badgeTypes[badge]?.icon}</span>
+            <span>{badgeTypes[badge]?.name}</span>
+          </span>
+        ))}
+      </div>
+    )
+  }
 
   if (gamePhase === 'final') {
     const myRank = leaderboard.findIndex(p => p.uid === user?.uid) + 1
@@ -1167,7 +1310,8 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
           {myRank === 1 ? 'You Won!' : myRank <= 3 ? 'Great Job!' : 'Game Over!'}
         </h2>
         <p className="text-3xl text-slate-300 mb-2">#{myRank} Place</p>
-        <p className="text-xl text-slate-500 mb-8">{myScore} points</p>
+        <p className="text-xl text-slate-500 mb-4">{myScore} points</p>
+        <MyBadges />
 
         <button onClick={() => {localStorage.removeItem('quizSession'); setView('home'); setSession(null); setJoinForm({ pin: '', name: '' });}} className="btn-gradient px-8 py-4 rounded-2xl font-bold">
           <i className="fa fa-home mr-2"></i>Back to Home
@@ -1179,6 +1323,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
   if (gamePhase === 'results') {
     const myAnswer = session?.answers?.[user?.uid]
     const wasCorrect = myAnswer === question?.correct
+    const multiplier = getMultiplier(myStreak)
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
@@ -1189,6 +1334,16 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
         <h2 className="text-3xl font-bold mb-2">{wasCorrect ? 'Correct!' : 'Wrong!'}</h2>
         {!wasCorrect && (
           <p className="text-slate-400 mb-2">Correct answer: <span className="text-green-400">{question?.options[question?.correct]}</span></p>
+        )}
+        {wasCorrect && myStreak >= 2 && (
+          <div className="flex items-center gap-2 mb-2 animate-bounce-in">
+            <i className="fa fa-fire text-orange-500 text-2xl animate-pulse"></i>
+            <span className="text-orange-400 font-bold text-xl">{myStreak} streak! {multiplier}x points!</span>
+            <i className="fa fa-fire text-orange-500 text-2xl animate-pulse"></i>
+          </div>
+        )}
+        {!wasCorrect && (
+          <p className="text-slate-500 text-sm mb-2">Streak reset</p>
         )}
         <p className="text-2xl text-blue-400 font-bold mb-4">{scores[user?.uid] || 0} pts</p>
 
@@ -1218,7 +1373,20 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
           <i className="fa fa-check text-4xl"></i>
         </div>
         <h2 className="text-3xl font-bold mb-2">Answer Submitted!</h2>
-        <p className="text-slate-500">Let's see if you got it right...</p>
+        <p className="text-slate-500 mb-6">Let's see if you got it right...</p>
+
+        {/* Reaction buttons while waiting */}
+        <div className="flex gap-2">
+          {reactionEmojis.map(emoji => (
+            <button
+              key={emoji}
+              onClick={() => sendReaction(emoji)}
+              className="text-3xl p-2 hover:scale-125 transition-transform active:scale-95"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
       </div>
     )
   }
@@ -1229,6 +1397,14 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
         <TimerBar duration={20} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={session?.questionStartTime} />
       </div>
 
+      {myStreak >= 2 && (
+        <div className="flex items-center justify-center gap-2 mb-3 animate-pulse">
+          <i className="fa fa-fire text-orange-500 text-xl"></i>
+          <span className="text-orange-400 font-bold">{myStreak} streak! Next: {getMultiplier(myStreak + 1)}x</span>
+          <i className="fa fa-fire text-orange-500 text-xl"></i>
+        </div>
+      )}
+
       <div className="text-center mb-6">
         <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
         <h2 className="text-2xl font-bold">{question?.text}</h2>
@@ -1238,11 +1414,27 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, lea
         {question?.options.map((opt, idx) => (
           <button
             key={idx}
-            onClick={() => submitAnswer(idx)}
+            onClick={() => {
+              const answerTime = Date.now() - questionStartTime
+              submitAnswer(idx, answerTime)
+            }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95`}
           >
             <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
             <span className="text-lg font-semibold text-center">{opt}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Reaction buttons during question */}
+      <div className="flex justify-center gap-2 mt-4 pt-4 border-t border-slate-800">
+        {reactionEmojis.map(emoji => (
+          <button
+            key={emoji}
+            onClick={() => sendReaction(emoji)}
+            className="text-2xl p-2 hover:scale-125 transition-transform active:scale-95"
+          >
+            {emoji}
           </button>
         ))}
       </div>
