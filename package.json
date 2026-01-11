@@ -18,7 +18,12 @@
     "type": "git",
     "url": "git+https://github.com/Cre-eD/quiz.git"
   },
-  "keywords": ["quiz", "firebase", "react", "education"],
+  "keywords": [
+    "quiz",
+    "firebase",
+    "react",
+    "education"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
@@ -27,6 +32,7 @@
   "homepage": "https://github.com/Cre-eD/quiz#readme",
   "dependencies": {
     "firebase": "^10.8.0",
+    "framer-motion": "^12.25.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

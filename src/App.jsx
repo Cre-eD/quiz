@@ -1,13 +1,28 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { signInAnonymously, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth'
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, collection, deleteDoc } from 'firebase/firestore'
 import { auth, db, googleProvider, ADMIN_EMAIL } from './firebase'
 import { optionColors } from './constants'
+import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
 import ConfirmModal from './components/ConfirmModal'
 import Toast from './components/Toast'
 import Confetti from './components/Confetti'
 import TimerBar from './components/TimerBar'
+
+// Page transition variants
+const pageVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 }
+}
+
+const pageTransition = {
+  type: 'tween',
+  ease: 'easeInOut',
+  duration: 0.3
+}
 
 export default function App() {
   const [view, setView] = useState('home')
@@ -44,6 +59,8 @@ export default function App() {
   const [reactions, setReactions] = useState([])
   const [badges, setBadges] = useState({})
   const [myReactionCount, setMyReactionCount] = useState(0)
+  const [shakeScreen, setShakeScreen] = useState(false)
+  const [scorePopKey, setScorePopKey] = useState(0)
 
   // Reaction config
   const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏', '😂', '🤯', '💀', '🎉', '❤️']
@@ -260,6 +277,17 @@ export default function App() {
       return onSnapshot(doc(db, 'sessions', session.pin), (snap) => {
         if (snap.exists()) {
           const data = snap.data()
+
+          // Check if player was kicked
+          if (data.bannedUsers?.includes(user?.uid)) {
+            localStorage.removeItem('quizSession')
+            setSession(null)
+            setView('home')
+            setJoinForm({ pin: '', name: '' })
+            showToast("You have been removed from the game.", "error")
+            return
+          }
+
           setSession(data)
           const newPhase = data.status || 'lobby'
 
@@ -271,7 +299,10 @@ export default function App() {
           if (newPhase === 'results') {
             const myScore = data.scores?.[user?.uid] || 0
             const prevScore = scores[user?.uid] || 0
-            if (myScore > prevScore) setShowConfetti(true)
+            if (myScore > prevScore) {
+              setShowConfetti(true)
+              setTimeout(() => setShowConfetti(false), 2000)
+            }
           }
 
           setGamePhase(newPhase)
@@ -351,7 +382,7 @@ export default function App() {
       currentQuestion: 0, answers: {}, allowLateJoin: true,
       leaderboardId: selectedLeaderboard || null,
       leaderboardName: selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null,
-      reactions: [], badges: {}, correctCounts: {}
+      reactions: [], badges: {}, correctCounts: {}, bannedUsers: []
     }
     await setDoc(doc(db, 'sessions', pin), data)
     setSession(data)
@@ -367,6 +398,20 @@ export default function App() {
 
   const toggleLateJoin = async () => {
     await updateDoc(doc(db, 'sessions', session.pin), { allowLateJoin: !session.allowLateJoin })
+  }
+
+  const kickPlayer = async (uid) => {
+    if (!session?.pin) return
+    const currentBanned = session.bannedUsers || []
+    const updates = {
+      bannedUsers: [...currentBanned, uid]
+    }
+    // Remove player from players, scores, streaks
+    updates[`players.${uid}`] = null
+    updates[`scores.${uid}`] = null
+    updates[`streaks.${uid}`] = null
+    await updateDoc(doc(db, 'sessions', session.pin), updates)
+    showToast("Player kicked")
   }
 
   const handleJoin = async () => {
@@ -387,6 +432,13 @@ export default function App() {
 
       if (sessionData.status !== 'lobby' && !sessionData.allowLateJoin) {
         showToast("Game already in progress. Late joining is disabled.", "error")
+        setLoading(false)
+        return
+      }
+
+      // Check if user is banned
+      if (sessionData.bannedUsers?.includes(user.uid)) {
+        showToast("You have been removed from this game.", "error")
         setLoading(false)
         return
       }
@@ -511,9 +563,21 @@ export default function App() {
     if (answered) return
     setAnswered(true)
     setPlayerAnswer(answerIndex)
+    haptic.medium()
 
     const question = session.quiz.questions[currentQuestion]
     const isCorrect = answerIndex === question.correct
+
+    // Haptic and visual feedback based on answer
+    if (isCorrect) {
+      haptic.success()
+      setScorePopKey(prev => prev + 1)
+    } else {
+      haptic.error()
+      setShakeScreen(true)
+      setTimeout(() => setShakeScreen(false), 500)
+    }
+
     const currentStreak = streaks[user.uid] || 0
     const newStreak = isCorrect ? currentStreak + 1 : 0
     const multiplier = isCorrect ? getStreakMultiplier(newStreak) : 1
@@ -540,6 +604,9 @@ export default function App() {
     // On Fire - 4+ streak
     if (newStreak >= 4) {
       newBadges.perfectStreak = true
+      haptic.streak()
+    } else if (newStreak >= 2) {
+      haptic.streak()
     }
 
     // Perfect Game - all correct (check on last question)
@@ -574,17 +641,47 @@ export default function App() {
   }
 
   return (
-    <>
-      {view === 'home' && <HomeView {...{ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, signInWithGoogle }} />}
-      {view === 'dash' && <DashboardView {...{ user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />}
-      {view === 'edit' && <EditView {...{ user, isAdmin, setView, activeQuiz, setActiveQuiz, handleSave, saving, showToast }} />}
-      {view === 'host' && <HostLobbyView {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, db, deleteDoc, doc }} />}
-      {view === 'play-host' && <HostPlayView {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }} />}
-      {view === 'wait' && <WaitView joinForm={joinForm} />}
-      {view === 'play-player' && <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm }} />}
+    <div className={shakeScreen ? 'animate-shake' : ''}>
+      <AnimatePresence mode="wait">
+        {view === 'home' && (
+          <motion.div key="home" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <HomeView {...{ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, signInWithGoogle }} />
+          </motion.div>
+        )}
+        {view === 'dash' && (
+          <motion.div key="dash" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <DashboardView {...{ user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />
+          </motion.div>
+        )}
+        {view === 'edit' && (
+          <motion.div key="edit" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <EditView {...{ user, isAdmin, setView, activeQuiz, setActiveQuiz, handleSave, saving, showToast }} />
+          </motion.div>
+        )}
+        {view === 'host' && (
+          <motion.div key="host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <HostLobbyView {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, db, deleteDoc, doc }} />
+          </motion.div>
+        )}
+        {view === 'play-host' && (
+          <motion.div key="play-host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <HostPlayView {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }} />
+          </motion.div>
+        )}
+        {view === 'wait' && (
+          <motion.div key="wait" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <WaitView joinForm={joinForm} />
+          </motion.div>
+        )}
+        {view === 'play-player' && (
+          <motion.div key="play-player" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+            <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <Confetti show={showConfetti} />
-    </>
+    </div>
   )
 }
 
@@ -609,7 +706,7 @@ function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView
           <input
             type="text"
             inputMode="numeric"
-            className="w-full glass p-6 rounded-2xl text-center text-5xl font-mono font-bold tracking-[0.5em] focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal placeholder:text-2xl"
+            className="w-full glass p-6 rounded-2xl text-center text-5xl font-mono font-bold tracking-[0.3em] focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal placeholder:text-2xl indent-[0.15em]"
             placeholder="PIN"
             maxLength={4}
             value={joinForm.pin}
@@ -633,7 +730,7 @@ function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView
         </div>
 
         <button
-          onClick={handleJoin}
+          onClick={() => { haptic.medium(); handleJoin(); }}
           disabled={loading || !joinForm.pin || !joinForm.name.trim()}
           className="w-full btn-gradient py-5 rounded-2xl font-bold text-2xl disabled:opacity-50 flex items-center justify-center gap-3 mb-8"
         >
@@ -1032,7 +1129,7 @@ function EditView({ user, isAdmin, setView, activeQuiz, setActiveQuiz, handleSav
   )
 }
 
-function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJoin, db, deleteDoc, doc }) {
+function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, db, deleteDoc, doc }) {
   if (!user?.email || !isAdmin) { setView('home'); return null }
 
   return (
@@ -1043,13 +1140,19 @@ function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJ
       </div>
 
       <div className="relative z-10">
-        <p className="text-slate-400 uppercase tracking-[0.3em] text-sm mb-2">Join at lecturequiz.pro</p>
+        <p className="text-slate-400 uppercase tracking-[0.2em] text-sm mb-2">Join at devops-quiz-2c930.web.app</p>
         <p className="text-slate-500 uppercase tracking-widest text-sm mb-6">Game PIN</p>
         <div className="glow rounded-3xl p-4 mb-8">
           <h2 className="text-[10rem] leading-none font-black gradient-text animate-float">{session?.pin}</h2>
         </div>
 
-        <p className="text-slate-400 mb-2">{Object.keys(session?.players || {}).length} players joined</p>
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <div className="bg-blue-600 px-4 py-2 rounded-full flex items-center gap-2">
+            <i className="fa fa-users"></i>
+            <span className="text-2xl font-bold">{Object.keys(session?.players || {}).length}</span>
+          </div>
+          <span className="text-slate-400">players joined</span>
+        </div>
         {session?.leaderboardName && (
           <p className="text-purple-400 mb-4 flex items-center justify-center gap-2">
             <i className="fa fa-trophy"></i>
@@ -1057,37 +1160,59 @@ function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJ
           </p>
         )}
 
-        <div className="flex flex-wrap justify-center gap-3 mb-8 max-w-3xl min-h-[60px]">
-          {Object.entries(session?.players || {}).map(([uid, name], i) => (
-            <span key={uid} className="glass px-5 py-2 rounded-full text-lg animate-bounce-in" style={{ animationDelay: `${i * 0.1}s` }}>
-              {name}
-            </span>
-          ))}
+        <div className="glass rounded-2xl p-4 mb-8 w-full max-w-4xl max-h-48 overflow-y-auto">
+          {Object.keys(session?.players || {}).length === 0 ? (
+            <p className="text-slate-500 text-center py-4">Waiting for players to join...</p>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+              {Object.entries(session?.players || {}).map(([uid, name], i) => (
+                <div
+                  key={uid}
+                  className="bg-slate-800/60 px-3 py-2 rounded-lg text-sm truncate flex items-center justify-between gap-1 group hover:bg-slate-700/60 transition-colors"
+                  title={name}
+                >
+                  <span className="truncate">{name}</span>
+                  <button
+                    onClick={() => kickPlayer(uid)}
+                    className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs flex-shrink-0"
+                    title="Kick player"
+                  >
+                    <i className="fa fa-times text-[10px]"></i>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="mb-8">
+        {/* Control bar */}
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => {setView('dash'); deleteDoc(doc(db, 'sessions', session.pin));}}
+            className="glass px-6 py-3 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500/50 transition-all flex items-center gap-2"
+          >
+            <i className="fa fa-times"></i>
+            <span>Cancel</span>
+          </button>
+
           <button
             onClick={toggleLateJoin}
-            className={`flex items-center gap-3 px-5 py-3 rounded-xl transition-all ${session?.allowLateJoin ? 'bg-green-600/20 border border-green-500/50 text-green-400' : 'bg-slate-800/50 border border-slate-700 text-slate-400'}`}
+            className={`glass px-5 py-3 rounded-xl transition-all flex items-center gap-3 ${session?.allowLateJoin ? 'text-green-400 border-green-500/30' : 'text-slate-500'}`}
           >
             <i className={`fa ${session?.allowLateJoin ? 'fa-door-open' : 'fa-door-closed'}`}></i>
-            <span>Late join: {session?.allowLateJoin ? 'Allowed' : 'Blocked'}</span>
+            <span className="text-sm">{session?.allowLateJoin ? 'Late Join On' : 'Late Join Off'}</span>
             <div className={`w-10 h-6 rounded-full p-1 ${session?.allowLateJoin ? 'bg-green-600' : 'bg-slate-700'}`}>
               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${session?.allowLateJoin ? 'translate-x-4' : ''}`}></div>
             </div>
           </button>
-        </div>
 
-        <div className="flex gap-4">
-          <button onClick={() => {setView('dash'); deleteDoc(doc(db, 'sessions', session.pin));}} className="glass px-8 py-4 rounded-2xl font-semibold hover:bg-slate-800">
-            <i className="fa fa-times mr-2"></i>Cancel
-          </button>
           <button
             onClick={startGame}
             disabled={Object.keys(session?.players || {}).length === 0}
-            className="btn-gradient px-12 py-4 rounded-2xl font-bold text-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-gradient px-10 py-4 rounded-xl font-bold text-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
           >
-            <i className="fa fa-play mr-3"></i>Start Game
+            <i className="fa fa-play"></i>
+            <span>Start Game</span>
           </button>
         </div>
       </div>
@@ -1102,21 +1227,44 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
   const answeredCount = Object.keys(session?.answers || {}).length
   const totalPlayers = Object.keys(session?.players || {}).length
 
-  // Floating reactions component - shows last 10 reactions
-  const FloatingReactions = () => {
-    const recentReactions = (reactions || []).slice(-10)
-    if (recentReactions.length === 0) return null
-    return (
-      <div className="fixed top-20 right-4 flex flex-col gap-2 pointer-events-none z-50 max-h-96 overflow-hidden">
-        {recentReactions.map((r, i) => (
-          <div key={r.id || i} className="animate-slide-up bg-slate-800/95 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg border border-slate-700">
-            <span className="text-3xl">{r.emoji}</span>
-            <span className="text-sm text-slate-200 font-medium">{r.playerName}</span>
-          </div>
-        ))}
-      </div>
-    )
-  }
+  // Ref to the container where we'll append reactions directly to DOM
+  const reactionsContainerRef = useRef(null)
+  const processedIdsRef = useRef(new Set())
+
+  // Process new reactions and add them directly to DOM (no React state)
+  useEffect(() => {
+    const container = reactionsContainerRef.current
+    if (!container) return
+
+    const allReactions = reactions || []
+
+    allReactions.forEach(r => {
+      if (!r.id || processedIdsRef.current.has(r.id)) return
+      processedIdsRef.current.add(r.id)
+
+      // Create reaction element directly in DOM
+      const el = document.createElement('div')
+      const seed = r.id.toString().split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+      el.className = 'reaction-bubble'
+      el.style.left = `${10 + (seed % 80)}%`
+      el.style.setProperty('--drift', `${-30 + (seed % 60)}px`)
+      el.innerHTML = `<span class="text-5xl drop-shadow-lg">${r.emoji}</span>`
+
+      container.appendChild(el)
+
+      // Remove after animation completes
+      setTimeout(() => {
+        if (el.parentNode) el.parentNode.removeChild(el)
+      }, 3000)
+    })
+  }, [reactions])
+
+  // Reset on new question
+  useEffect(() => {
+    processedIdsRef.current = new Set()
+    const container = reactionsContainerRef.current
+    if (container) container.innerHTML = ''
+  }, [currentQuestion])
 
   // Player badges display
   const PlayerBadges = ({ uid }) => {
@@ -1165,7 +1313,7 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
   if (gamePhase === 'results') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <FloatingReactions />
+        <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
         <h2 className="text-3xl font-bold mb-2">Question {currentQuestion + 1} Results</h2>
         <p className="text-slate-400 mb-4">Correct answer: <span className="text-green-400 font-semibold">{question?.options[question?.correct]}</span></p>
 
@@ -1214,7 +1362,7 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
 
   return (
     <div className="min-h-screen flex flex-col p-6">
-      <FloatingReactions />
+      <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
       <div className="flex justify-between items-center mb-4">
         <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
         <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
@@ -1269,7 +1417,7 @@ function WaitView({ joinForm }) {
   )
 }
 
-function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm }) {
+function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey }) {
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
@@ -1278,6 +1426,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
   // Use session's questionStartTime for accurate speed tracking
   const questionStartTime = session?.questionStartTime || Date.now()
+  const myScore = scores?.[user?.uid] || 0
 
   // My badges display
   const MyBadges = () => {
@@ -1340,7 +1489,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
         <Confetti show={showConfetti} />
-        <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-bounce-in ${wasCorrect ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-bounce-in ${wasCorrect ? 'bg-green-600 animate-correct-glow' : 'bg-red-600 animate-wrong-flash'}`}>
           <i className={`fa ${wasCorrect ? 'fa-check' : 'fa-times'} text-5xl`}></i>
         </div>
         <h2 className="text-3xl font-bold mb-2">{wasCorrect ? 'Correct!' : 'Wrong!'}</h2>
@@ -1349,15 +1498,15 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
         )}
         {wasCorrect && myStreak >= 2 && (
           <div className="flex items-center gap-2 mb-2 animate-bounce-in">
-            <i className="fa fa-fire text-orange-500 text-2xl animate-pulse"></i>
-            <span className="text-orange-400 font-bold text-xl">{myStreak} streak! {multiplier}x points!</span>
-            <i className="fa fa-fire text-orange-500 text-2xl animate-pulse"></i>
+            <i className="fa fa-fire text-orange-500 text-2xl animate-fire-glow"></i>
+            <span className="text-orange-400 font-bold text-xl animate-fire-glow">{myStreak} streak! {multiplier}x points!</span>
+            <i className="fa fa-fire text-orange-500 text-2xl animate-fire-glow"></i>
           </div>
         )}
         {!wasCorrect && (
           <p className="text-slate-500 text-sm mb-2">Streak reset</p>
         )}
-        <p className="text-2xl text-blue-400 font-bold mb-4">{scores[user?.uid] || 0} pts</p>
+        <p key={scorePopKey} className="text-2xl text-blue-400 font-bold mb-4 animate-number-pop">{myScore} pts</p>
 
         {question?.explanation && (
           <div className="glass rounded-2xl p-4 w-full max-w-md text-left border border-yellow-500/30 animate-slide-up mb-4">
@@ -1395,7 +1544,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
               {reactionEmojis.map(emoji => (
                 <button
                   key={emoji}
-                  onClick={(e) => { e.stopPropagation(); sendReaction(emoji); }}
+                  onClick={(e) => { e.stopPropagation(); haptic.light(); sendReaction(emoji); }}
                   className="text-2xl p-2 hover:scale-125 transition-transform active:scale-90 bg-slate-800/50 rounded-lg"
                 >
                   {emoji}
@@ -1417,10 +1566,10 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
       </div>
 
       {myStreak >= 2 && (
-        <div className="flex items-center justify-center gap-2 mb-3 animate-pulse">
-          <i className="fa fa-fire text-orange-500 text-xl"></i>
-          <span className="text-orange-400 font-bold">{myStreak} streak! Next: {getMultiplier(myStreak + 1)}x</span>
-          <i className="fa fa-fire text-orange-500 text-xl"></i>
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <i className="fa fa-fire text-orange-500 text-xl animate-fire-glow"></i>
+          <span className="text-orange-400 font-bold animate-fire-glow">{myStreak} streak! Next: {getMultiplier(myStreak + 1)}x</span>
+          <i className="fa fa-fire text-orange-500 text-xl animate-fire-glow"></i>
         </div>
       )}
 
@@ -1434,10 +1583,12 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
           <button
             key={idx}
             onClick={() => {
+              haptic.light()
               const answerTime = Date.now() - questionStartTime
               submitAnswer(idx, answerTime)
             }}
-            className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95`}
+            className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal`}
+            style={{ animationDelay: `${idx * 0.1}s` }}
           >
             <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
             <span className="text-lg font-semibold text-center">{opt}</span>
@@ -1451,7 +1602,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
           {reactionEmojis.map(emoji => (
             <button
               key={emoji}
-              onClick={(e) => { e.stopPropagation(); sendReaction(emoji); }}
+              onClick={(e) => { e.stopPropagation(); haptic.light(); sendReaction(emoji); }}
               className="text-xl p-1.5 hover:scale-110 transition-transform active:scale-90 flex-shrink-0 opacity-60 hover:opacity-100"
             >
               {emoji}
