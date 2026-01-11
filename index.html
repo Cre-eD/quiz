@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LectureQuiz Pro | Live Interactive Quizzes</title>
+    <meta name="description" content="Create and host live interactive quizzes for your classroom">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-in': 'bounceIn 0.5s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'shake': 'shake 0.5s ease-in-out',
+                        'confetti': 'confetti 1s ease-out forwards',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #020617 50%, #0f172a 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        @keyframes confetti {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-100px) rotate(720deg); opacity: 0; }
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.4);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .option-btn {
+            transition: all 0.2s ease;
+        }
+        .option-btn:hover:not(:disabled) {
+            transform: scale(1.02);
+        }
+        .option-btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        .progress-bar {
+            transition: width 0.1s linear;
+        }
+        .glow {
+            box-shadow: 0 0 60px rgba(59, 130, 246, 0.3);
+        }
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: confetti 1s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKtogNq4zoiAd6dGa16nerndhKj3iA7Hs",
+            authDomain: "devops-quiz-2c930.firebaseapp.com",
+            projectId: "devops-quiz-2c930",
+            appId: "1:86349315764:web:2f579516f90219ed20a1e1"
+        };
+
+        const ADMIN_EMAIL = "creeed22@gmail.com";
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        window.FB = {
+            auth, db, signInAnonymously, onAuthStateChanged,
+            doc, setDoc, getDoc, updateDoc, onSnapshot, collection, deleteDoc, serverTimestamp,
+            googleProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, ADMIN_EMAIL
+        };
+        window.dispatchEvent(new Event('fb-ready'));
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // Loading Spinner Component
+        const Spinner = ({ size = "md" }) => {
+            const sizes = { sm: "w-4 h-4", md: "w-8 h-8", lg: "w-12 h-12" };
+            return (
+                <div className={`${sizes[size]} border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin`}></div>
+            );
+        };
+
+        // Confirmation Modal
+        const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = "Delete", danger = true }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-slide-up">
+                    <div className="glass p-8 rounded-3xl max-w-md w-full mx-4 animate-bounce-in">
+                        <h3 className="text-2xl font-bold mb-2">{title}</h3>
+                        <p className="text-slate-400 mb-6">{message}</p>
+                        <div className="flex gap-3">
+                            <button onClick={onCancel} className="flex-1 bg-slate-800 py-3 rounded-xl font-semibold hover:bg-slate-700 transition-colors">Cancel</button>
+                            <button onClick={onConfirm} className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${danger ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>{confirmText}</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Toast Notification
+        const Toast = ({ message, type = "success", onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 3000);
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            const colors = {
+                success: "bg-green-600",
+                error: "bg-red-600",
+                info: "bg-blue-600"
+            };
+
+            return (
+                <div className={`fixed bottom-6 right-6 ${colors[type]} px-6 py-4 rounded-xl shadow-2xl animate-slide-up flex items-center gap-3 z-50`}>
+                    <i className={`fa ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}`}></i>
+                    {message}
+                </div>
+            );
+        };
+
+        // Confetti Effect
+        const Confetti = ({ show }) => {
+            if (!show) return null;
+            const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'];
+            return (
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-40">
+                    {[...Array(50)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="particle"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 100}%`,
+                                backgroundColor: colors[Math.floor(Math.random() * colors.length)],
+                                animationDelay: `${Math.random() * 0.5}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            );
+        };
+
+        // Timer Bar Component - synced to server time
+        const TimerBar = ({ duration, onComplete, isRunning, startTime }) => {
+            const [timeLeft, setTimeLeft] = useState(duration);
+            const completedRef = useRef(false);
+
+            useEffect(() => {
+                // Reset when new question starts
+                completedRef.current = false;
+                setTimeLeft(duration);
+            }, [duration, startTime]);
+
+            useEffect(() => {
+                if (!isRunning) return;
+
+                const updateTimer = () => {
+                    if (startTime) {
+                        // Calculate time based on server start time
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        const remaining = Math.max(0, duration - elapsed);
+                        setTimeLeft(remaining);
+
+                        if (remaining <= 0 && !completedRef.current) {
+                            completedRef.current = true;
+                            onComplete?.();
+                        }
+                    } else {
+                        // Fallback to local countdown if no startTime
+                        setTimeLeft(t => {
+                            const newTime = t - 0.1;
+                            if (newTime <= 0 && !completedRef.current) {
+                                completedRef.current = true;
+                                onComplete?.();
+                            }
+                            return Math.max(0, newTime);
+                        });
+                    }
+                };
+
+                const timer = setInterval(updateTimer, 100);
+                return () => clearInterval(timer);
+            }, [isRunning, startTime, duration, onComplete]);
+
+            const percentage = (timeLeft / duration) * 100;
+            const color = percentage > 50 ? 'bg-green-500' : percentage > 25 ? 'bg-yellow-500' : 'bg-red-500';
+
+            return (
+                <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full ${color} progress-bar rounded-full`} style={{ width: `${percentage}%` }}></div>
+                </div>
+            );
+        };
+
+        // Option colors for quiz answers
+        const optionColors = [
+            { bg: 'bg-red-600 hover:bg-red-500', icon: 'fa-diamond', selected: 'ring-4 ring-red-300' },
+            { bg: 'bg-blue-600 hover:bg-blue-500', icon: 'fa-square', selected: 'ring-4 ring-blue-300' },
+            { bg: 'bg-yellow-500 hover:bg-yellow-400 text-black', icon: 'fa-circle', selected: 'ring-4 ring-yellow-300' },
+            { bg: 'bg-green-600 hover:bg-green-500', icon: 'fa-star', selected: 'ring-4 ring-green-300' }
+        ];
+
+        function App() {
+            const [view, setView] = useState('home');
+            const [user, setUser] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [quizzes, setQuizzes] = useState([]);
+            const [activeQuiz, setActiveQuiz] = useState({ title: '', questions: [] });
+            const [session, setSession] = useState(null);
+            const [joinForm, setJoinForm] = useState({ pin: '', name: '' });
+            const [importText, setImportText] = useState('');
+            const [showImport, setShowImport] = useState(false);
+            const [toast, setToast] = useState(null);
+            const [confirmModal, setConfirmModal] = useState({ isOpen: false });
+            const [saving, setSaving] = useState(false);
+
+            // Game state
+            const [currentQuestion, setCurrentQuestion] = useState(0);
+            const [playerAnswer, setPlayerAnswer] = useState(null);
+            const [showResults, setShowResults] = useState(false);
+            const [scores, setScores] = useState({});
+            const [answered, setAnswered] = useState(false);
+            const [showConfetti, setShowConfetti] = useState(false);
+            const [gamePhase, setGamePhase] = useState('lobby'); // lobby, question, results, final
+            const sessionRef = useRef(null);
+
+            const showToast = (message, type = "success") => setToast({ message, type });
+
+            // Check if user is admin (must have email matching admin email)
+            const checkAdmin = (u) => {
+                if (!u || !u.email) return false;
+                return u.email.toLowerCase() === window.FB.ADMIN_EMAIL.toLowerCase();
+            };
+
+            // Google Sign-In for teachers (try popup first, fallback to redirect)
+            const signInWithGoogle = async () => {
+                setLoading(true);
+                try {
+                    // Try popup first
+                    const result = await window.FB.signInWithPopup(window.FB.auth, window.FB.googleProvider);
+                    await handleAuthResult(result.user);
+                } catch (popupError) {
+                    console.log('Popup failed, trying redirect:', popupError.code);
+                    // If popup blocked or failed, try redirect
+                    if (popupError.code === 'auth/popup-blocked' ||
+                        popupError.code === 'auth/popup-closed-by-user' ||
+                        popupError.code === 'auth/cancelled-popup-request') {
+                        sessionStorage.setItem('authRedirect', 'dash');
+                        window.FB.signInWithRedirect(window.FB.auth, window.FB.googleProvider);
+                    } else {
+                        showToast("Sign-in failed: " + (popupError.message || "Unknown error"), "error");
+                        setLoading(false);
+                    }
+                }
+            };
+
+            // Handle successful auth result
+            const handleAuthResult = async (authUser) => {
+                if (!authUser) return;
+
+                const adminEmail = window.FB.ADMIN_EMAIL.toLowerCase();
+                const userEmail = (authUser.email || '').toLowerCase();
+
+                if (userEmail === adminEmail) {
+                    setIsAdmin(true);
+                    setView('dash');
+                    showToast("Welcome back, Admin!");
+                } else {
+                    // Not authorized - sign them out
+                    await window.FB.signOut(window.FB.auth);
+                    showToast("Access denied. Only " + window.FB.ADMIN_EMAIL + " can access the dashboard.", "error");
+                    await window.FB.signInAnonymously(window.FB.auth);
+                }
+                setLoading(false);
+            };
+
+            // Handle redirect result on page load
+            useEffect(() => {
+                const handleRedirectResult = async () => {
+                    try {
+                        const result = await window.FB.getRedirectResult(window.FB.auth);
+                        if (result && result.user) {
+                            sessionStorage.removeItem('authRedirect');
+                            await handleAuthResult(result.user);
+                        }
+                    } catch (e) {
+                        console.error('Redirect error:', e);
+                        showToast("Sign-in failed. Please try again.", "error");
+                    }
+                };
+
+                if (window.FB) {
+                    handleRedirectResult();
+                } else {
+                    window.addEventListener('fb-ready', handleRedirectResult);
+                    return () => window.removeEventListener('fb-ready', handleRedirectResult);
+                }
+            }, []);
+
+            // Sign out admin
+            const signOutAdmin = async () => {
+                try {
+                    await window.FB.signOut(window.FB.auth);
+                    setIsAdmin(false);
+                    setView('home');
+                    showToast("Signed out successfully");
+                    // Sign back in anonymously
+                    await window.FB.signInAnonymously(window.FB.auth);
+                } catch (e) {
+                    showToast("Sign-out failed", "error");
+                }
+            };
+
+            useEffect(() => {
+                const init = () => {
+                    window.FB.onAuthStateChanged(window.FB.auth, u => {
+                        setUser(u);
+                        setIsAdmin(checkAdmin(u));
+                        setLoading(false);
+                        // Only auto sign-in anonymously if no user at all
+                        if (!u) window.FB.signInAnonymously(window.FB.auth);
+                    });
+                };
+                if (window.FB) init();
+                else window.addEventListener('fb-ready', init);
+                return () => window.removeEventListener('fb-ready', init);
+            }, []);
+
+            // Load quizzes for dashboard
+            useEffect(() => {
+                if (view === 'dash' && user) {
+                    const q = window.FB.collection(window.FB.db, 'quizzes');
+                    return window.FB.onSnapshot(q, (snapshot) => {
+                        setQuizzes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    });
+                }
+            }, [view, user]);
+
+            // Real-time session listener for host
+            useEffect(() => {
+                if ((view === 'host' || view === 'play-host') && session?.pin) {
+                    const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                    return window.FB.onSnapshot(sRef, (snap) => {
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            setSession(data);
+                            setGamePhase(data.status || 'lobby');
+                            if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion);
+                            if (data.scores) setScores(data.scores);
+                        }
+                    });
+                }
+            }, [view, session?.pin]);
+
+            // Real-time session listener for player
+            useEffect(() => {
+                if ((view === 'wait' || view === 'play-player') && session?.pin) {
+                    const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                    return window.FB.onSnapshot(sRef, (snap) => {
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            setSession(data);
+                            const newPhase = data.status || 'lobby';
+
+                            if (newPhase === 'question' && gamePhase !== 'question') {
+                                setAnswered(false);
+                                setPlayerAnswer(null);
+                            }
+                            if (newPhase === 'results') {
+                                const myScore = data.scores?.[user?.uid] || 0;
+                                const prevScore = scores[user?.uid] || 0;
+                                if (myScore > prevScore) setShowConfetti(true);
+                            }
+
+                            setGamePhase(newPhase);
+                            if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion);
+                            if (data.scores) setScores(data.scores);
+
+                            if (newPhase === 'question' && gamePhase === 'lobby') {
+                                setView('play-player');
+                            }
+                        }
+                    });
+                }
+            }, [view, session?.pin, gamePhase, user?.uid, scores]);
+
+            const handleImport = () => {
+                try {
+                    const data = JSON.parse(importText);
+                    if (!data.title || !Array.isArray(data.questions)) throw new Error("Invalid format");
+                    setActiveQuiz(data);
+                    setShowImport(false);
+                    setImportText('');
+                    setView('edit');
+                    showToast("Quiz imported successfully!");
+                } catch (e) {
+                    showToast("Invalid JSON format", "error");
+                }
+            };
+
+            const handleSave = async () => {
+                if (!activeQuiz.title.trim()) {
+                    showToast("Please enter a quiz title", "error");
+                    return;
+                }
+                setSaving(true);
+                try {
+                    const id = activeQuiz.id || Math.random().toString(36).substring(2, 11);
+                    await window.FB.setDoc(window.FB.doc(window.FB.db, 'quizzes', id), { ...activeQuiz, id, owner: user.uid });
+                    showToast("Quiz saved successfully!");
+                    setView('dash');
+                } catch (e) {
+                    showToast("Failed to save quiz", "error");
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            const handleDelete = async (quiz) => {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Delete Quiz",
+                    message: `Are you sure you want to delete "${quiz.title}"? This action cannot be undone.`,
+                    onConfirm: async () => {
+                        try {
+                            await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'quizzes', quiz.id));
+                            showToast("Quiz deleted");
+                        } catch (e) {
+                            showToast("Failed to delete quiz", "error");
+                        }
+                        setConfirmModal({ isOpen: false });
+                    },
+                    onCancel: () => setConfirmModal({ isOpen: false })
+                });
+            };
+
+            const handleLaunch = async (quiz) => {
+                const pin = Math.floor(1000 + Math.random() * 9000).toString();
+                const data = {
+                    pin,
+                    quiz,
+                    status: 'lobby',
+                    players: {},
+                    scores: {},
+                    currentQuestion: 0,
+                    answers: {},
+                    allowLateJoin: true  // Teacher can toggle this
+                };
+                await window.FB.setDoc(window.FB.doc(window.FB.db, 'sessions', pin), data);
+                setSession(data);
+                setScores({});
+                setCurrentQuestion(0);
+                setGamePhase('lobby');
+                setView('host');
+            };
+
+            // Toggle late join setting
+            const toggleLateJoin = async () => {
+                const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                await window.FB.updateDoc(sRef, { allowLateJoin: !session.allowLateJoin });
+            };
+
+            const handleJoin = async () => {
+                if (!joinForm.pin || !joinForm.name.trim()) {
+                    showToast("Please enter PIN and name", "error");
+                    return;
+                }
+                setLoading(true);
+                try {
+                    const sRef = window.FB.doc(window.FB.db, 'sessions', joinForm.pin);
+                    const snap = await window.FB.getDoc(sRef);
+                    if (!snap.exists()) {
+                        showToast("PIN not found!", "error");
+                        setLoading(false);
+                        return;
+                    }
+                    const sessionData = snap.data();
+
+                    // Check if game already started and late join is disabled
+                    if (sessionData.status !== 'lobby' && !sessionData.allowLateJoin) {
+                        showToast("Game already in progress. Late joining is disabled.", "error");
+                        setLoading(false);
+                        return;
+                    }
+
+                    await window.FB.updateDoc(sRef, {
+                        [`players.${user.uid}`]: joinForm.name,
+                        [`scores.${user.uid}`]: sessionData.scores?.[user.uid] || 0  // Keep existing score if rejoining
+                    });
+                    // Save session to localStorage for page refresh recovery
+                    localStorage.setItem('quizSession', JSON.stringify({
+                        pin: joinForm.pin,
+                        name: joinForm.name
+                    }));
+                    setSession(sessionData);
+                    setScores(sessionData.scores || {});
+
+                    // If game already started, go directly to play view
+                    if (sessionData.status !== 'lobby') {
+                        setView('play-player');
+                        setGamePhase(sessionData.status);
+                        setCurrentQuestion(sessionData.currentQuestion || 0);
+                        showToast("Joined! Catching up...", "info");
+                    } else {
+                        setView('wait');
+                    }
+                } catch (e) {
+                    showToast("Failed to join session", "error");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Try to recover session after page refresh
+            const tryRecoverSession = async () => {
+                const saved = localStorage.getItem('quizSession');
+                if (!saved || !user) return;
+
+                try {
+                    const { pin, name } = JSON.parse(saved);
+                    const sRef = window.FB.doc(window.FB.db, 'sessions', pin);
+                    const snap = await window.FB.getDoc(sRef);
+
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        // Check if this user is still in the session
+                        if (data.players && data.players[user.uid]) {
+                            setSession(data);
+                            setScores(data.scores || {});
+                            setJoinForm({ pin, name });
+
+                            // Determine which view to show based on game status
+                            if (data.status === 'lobby') {
+                                setView('wait');
+                            } else if (data.status === 'final') {
+                                setView('play-player');
+                                setGamePhase('final');
+                            } else {
+                                setView('play-player');
+                                setGamePhase(data.status);
+                            }
+                            showToast("Session restored!", "info");
+                        } else {
+                            // User not in session anymore, clear storage
+                            localStorage.removeItem('quizSession');
+                        }
+                    } else {
+                        // Session ended, clear storage
+                        localStorage.removeItem('quizSession');
+                    }
+                } catch (e) {
+                    console.error('Failed to recover session:', e);
+                    localStorage.removeItem('quizSession');
+                }
+            };
+
+            // Recover session on user auth
+            useEffect(() => {
+                if (user && !isAdmin && view === 'home') {
+                    tryRecoverSession();
+                }
+            }, [user, isAdmin]);
+
+            // Host: Start the game
+            const startGame = async () => {
+                const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                await window.FB.updateDoc(sRef, {
+                    status: 'question',
+                    currentQuestion: 0,
+                    answers: {},
+                    questionStartTime: Date.now()  // Sync timer across all clients
+                });
+                setView('play-host');
+            };
+
+            // Host: Show results for current question
+            const showQuestionResults = async () => {
+                const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                await window.FB.updateDoc(sRef, { status: 'results' });
+            };
+
+            // Host: Next question
+            const nextQuestion = async () => {
+                const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                const nextQ = currentQuestion + 1;
+
+                if (nextQ >= session.quiz.questions.length) {
+                    await window.FB.updateDoc(sRef, { status: 'final' });
+                } else {
+                    await window.FB.updateDoc(sRef, {
+                        status: 'question',
+                        currentQuestion: nextQ,
+                        answers: {},
+                        questionStartTime: Date.now()  // Sync timer across all clients
+                    });
+                }
+            };
+
+            // Host: End game
+            const endGame = async () => {
+                await window.FB.deleteDoc(window.FB.doc(window.FB.db, 'sessions', session.pin));
+                setSession(null);
+                setView('dash');
+                showToast("Session ended");
+            };
+
+            // Player: Submit answer
+            const submitAnswer = async (answerIndex) => {
+                if (answered) return;
+                setAnswered(true);
+                setPlayerAnswer(answerIndex);
+
+                const question = session.quiz.questions[currentQuestion];
+                const isCorrect = answerIndex === question.correct;
+                const points = isCorrect ? 100 : 0;
+
+                const sRef = window.FB.doc(window.FB.db, 'sessions', session.pin);
+                const currentScore = scores[user.uid] || 0;
+
+                await window.FB.updateDoc(sRef, {
+                    [`answers.${user.uid}`]: answerIndex,
+                    [`scores.${user.uid}`]: currentScore + points
+                });
+            };
+
+            // Sorted leaderboard
+            const leaderboard = Object.entries(scores)
+                .map(([uid, score]) => ({ uid, score, name: session?.players?.[uid] || 'Unknown' }))
+                .sort((a, b) => b.score - a.score);
+
+            // Render function to get view content
+            const renderContent = () => {
+                // Initial loading screen
+                if (loading && view === 'home') return (
+                    <div className="h-screen flex items-center justify-center">
+                        <Spinner size="lg" />
+                    </div>
+                );
+
+            // HOME VIEW - PIN-first design for students
+            if (view === 'home') return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl"></div>
+                        <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <div className="relative z-10 w-full max-w-md">
+                        <div className="animate-float mb-4">
+                            <i className="fa fa-graduation-cap text-5xl text-blue-500"></i>
+                        </div>
+                        <h1 className="text-5xl font-black gradient-text mb-2">LectureQuiz</h1>
+                        <p className="text-slate-400 mb-10">Enter the game PIN to join</p>
+
+                        {/* PIN Input - Big and centered */}
+                        <div className="space-y-4 mb-6">
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                className="w-full glass p-6 rounded-2xl text-center text-5xl font-mono font-bold tracking-[0.5em] focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal placeholder:text-2xl"
+                                placeholder="PIN"
+                                maxLength={4}
+                                value={joinForm.pin}
+                                onChange={e => setJoinForm({...joinForm, pin: e.target.value.replace(/\D/g, '')})}
+                            />
+                            <input
+                                className="w-full glass p-4 rounded-xl text-center text-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                placeholder="Your Nickname"
+                                maxLength={20}
+                                value={joinForm.name}
+                                onChange={e => setJoinForm({...joinForm, name: e.target.value})}
+                                onKeyDown={e => e.key === 'Enter' && joinForm.pin && joinForm.name && handleJoin()}
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleJoin}
+                            disabled={loading || !joinForm.pin || !joinForm.name.trim()}
+                            className="w-full btn-gradient py-5 rounded-2xl font-bold text-2xl disabled:opacity-50 flex items-center justify-center gap-3 mb-8"
+                        >
+                            {loading ? <><Spinner size="sm" /> Joining...</> : <><i className="fa fa-play"></i> Join Game</>}
+                        </button>
+
+                        {/* Small teacher link at bottom */}
+                        <div className="pt-8 border-t border-slate-800">
+                            <button
+                                onClick={() => isAdmin ? setView('dash') : signInWithGoogle()}
+                                disabled={loading}
+                                className="text-slate-500 hover:text-blue-400 transition-colors text-sm flex items-center justify-center gap-2 mx-auto"
+                            >
+                                <i className={`${isAdmin ? 'fa fa-chalkboard-teacher' : 'fab fa-google'}`}></i>
+                                {isAdmin ? 'Go to Teacher Dashboard' : "I'm a teacher"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // DASHBOARD VIEW - Protected for admin only
+            if (view === 'dash') {
+                // Must be signed in with Google AND be the admin email
+                const hasGoogleAuth = user && user.email;
+                const isAuthorized = hasGoogleAuth && isAdmin;
+
+                // Redirect if not admin
+                if (!isAuthorized) {
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <div className="glass p-12 rounded-3xl max-w-md">
+                                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-600/20 flex items-center justify-center">
+                                    <i className="fa fa-lock text-4xl text-red-500"></i>
+                                </div>
+                                <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+                                <p className="text-slate-400 mb-6">You need to sign in with an authorized Google account to access the dashboard.</p>
+                                <button onClick={signInWithGoogle} className="btn-gradient px-8 py-3 rounded-xl font-bold w-full mb-3">
+                                    <i className="fab fa-google mr-2"></i>Sign in with Google
+                                </button>
+                                <button onClick={() => setView('home')} className="text-slate-500 hover:text-white transition-colors">
+                                    <i className="fa fa-arrow-left mr-2"></i>Back to Home
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                <div className="min-h-screen p-8 max-w-5xl mx-auto">
+                    <div className="flex justify-between items-center mb-10">
+                        <div>
+                            <h2 className="text-4xl font-black gradient-text">Dashboard</h2>
+                            <p className="text-slate-500 mt-1">Welcome, {user?.email}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={signOutAdmin} className="bg-slate-800/50 px-5 py-3 rounded-xl hover:bg-slate-800 transition-colors text-red-400 hover:text-red-300">
+                                <i className="fa fa-sign-out-alt mr-2"></i>Sign Out
+                            </button>
+                            <button onClick={() => setShowImport(true)} className="glass px-5 py-3 rounded-xl text-blue-400 hover:text-blue-300 transition-colors">
+                                <i className="fa fa-file-import mr-2"></i>Import
+                            </button>
+                            <button onClick={() => {setActiveQuiz({ title: 'New Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-6 py-3 rounded-xl font-bold">
+                                <i className="fa fa-plus mr-2"></i>Create
+                            </button>
+                        </div>
+                    </div>
+
+                    {showImport && (
+                        <div className="mb-8 glass p-6 rounded-3xl animate-slide-up border border-blue-500/30">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xl font-bold"><i className="fa fa-file-code mr-2 text-blue-500"></i>Import Quiz JSON</h3>
+                                <button onClick={() => setShowImport(false)} className="text-slate-500 hover:text-white"><i className="fa fa-times"></i></button>
+                            </div>
+                            <textarea
+                                className="w-full h-48 bg-slate-950/50 p-4 font-mono text-sm rounded-xl border border-slate-800 focus:border-blue-500 outline-none mb-4 transition-colors"
+                                placeholder='{"title": "My Quiz", "questions": [{"text": "Question?", "options": ["A", "B", "C", "D"], "correct": 0}]}'
+                                value={importText}
+                                onChange={e => setImportText(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-3">
+                                <button onClick={() => {setShowImport(false); setImportText('');}} className="px-5 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                                <button onClick={handleImport} className="btn-gradient px-6 py-2 rounded-lg font-semibold">Import Now</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {quizzes.length === 0 ? (
+                        <div className="glass rounded-3xl p-16 text-center">
+                            <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-slate-800 flex items-center justify-center">
+                                <i className="fa fa-folder-open text-4xl text-slate-600"></i>
+                            </div>
+                            <h3 className="text-2xl font-bold mb-2">No quizzes yet</h3>
+                            <p className="text-slate-500 mb-6">Create your first quiz or import one to get started</p>
+                            <button onClick={() => {setActiveQuiz({ title: 'My First Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-8 py-3 rounded-xl font-bold">
+                                <i className="fa fa-plus mr-2"></i>Create Your First Quiz
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {quizzes.map((q, idx) => (
+                                <div key={q.id} className="glass p-6 rounded-2xl card-hover flex justify-between items-center animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center font-bold text-lg">
+                                            {q.title.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <span className="text-xl font-bold block">{q.title}</span>
+                                            <span className="text-sm text-slate-500"><i className="fa fa-question-circle mr-1"></i>{q.questions?.length || 0} Questions</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleLaunch(q)} className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-2 rounded-xl font-bold hover:from-green-500 hover:to-emerald-500 transition-all">
+                                            <i className="fa fa-play mr-2"></i>Launch
+                                        </button>
+                                        <button onClick={() => {setActiveQuiz(q); setView('edit');}} className="bg-slate-800 p-2 px-4 rounded-xl hover:bg-slate-700 transition-colors">
+                                            <i className="fa fa-edit"></i>
+                                        </button>
+                                        <button onClick={() => handleDelete(q)} className="text-red-500 hover:text-red-400 p-2 px-3 transition-colors">
+                                            <i className="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <ConfirmModal {...confirmModal} />
+                </div>
+                );
+            }
+
+            // EDIT VIEW - Protected
+            if (view === 'edit') {
+                if (!user?.email || !isAdmin) { setView('home'); return null; }
+                return (
+                <div className="min-h-screen pb-24">
+                    <div className="p-8 max-w-4xl mx-auto">
+                        <div className="flex justify-between items-center mb-8">
+                            <input
+                                className="bg-transparent text-4xl font-black border-b-2 border-slate-800 focus:border-blue-500 pb-2 outline-none flex-grow gradient-text transition-colors"
+                                value={activeQuiz.title}
+                                onChange={e => setActiveQuiz({...activeQuiz, title: e.target.value})}
+                                placeholder="Quiz Title"
+                            />
+                            <button onClick={() => {navigator.clipboard.writeText(JSON.stringify(activeQuiz, null, 2)); showToast("JSON copied to clipboard!");}} className="ml-4 text-slate-500 hover:text-blue-400 transition-colors">
+                                <i className="fa fa-copy mr-1"></i>Export
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            {activeQuiz.questions.map((q, qIdx) => (
+                                <div key={qIdx} className="glass p-6 rounded-2xl space-y-4 relative animate-slide-up card-hover">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">{qIdx + 1}</span>
+                                        <button onClick={() => {const qs = [...activeQuiz.questions]; qs.splice(qIdx, 1); setActiveQuiz({...activeQuiz, questions: qs});}} className="absolute top-4 right-4 text-slate-600 hover:text-red-500 transition-colors">
+                                            <i className="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <input
+                                        className="w-full bg-slate-800/50 p-4 rounded-xl border border-slate-700 focus:border-blue-500 outline-none transition-colors"
+                                        placeholder="Enter your question..."
+                                        value={q.text}
+                                        onChange={e => {
+                                            const qs = [...activeQuiz.questions];
+                                            qs[qIdx].text = e.target.value;
+                                            setActiveQuiz({...activeQuiz, questions: qs});
+                                        }}
+                                    />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {q.options.map((opt, oIdx) => (
+                                            <div key={oIdx} className="relative">
+                                                <input
+                                                    className={`w-full p-3 pl-10 rounded-xl border-2 transition-all outline-none ${
+                                                        q.correct === oIdx
+                                                            ? 'border-green-500 bg-green-900/20'
+                                                            : 'border-slate-700 bg-slate-800/30 focus:border-slate-600'
+                                                    }`}
+                                                    value={opt}
+                                                    placeholder={`Option ${oIdx + 1}`}
+                                                    onChange={e => {
+                                                        const qs = [...activeQuiz.questions];
+                                                        qs[qIdx].options[oIdx] = e.target.value;
+                                                        setActiveQuiz({...activeQuiz, questions: qs});
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const qs = [...activeQuiz.questions];
+                                                        qs[qIdx].correct = oIdx;
+                                                        setActiveQuiz({...activeQuiz, questions: qs});
+                                                    }}
+                                                    className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                                        q.correct === oIdx
+                                                            ? 'border-green-500 bg-green-500'
+                                                            : 'border-slate-600 hover:border-slate-500'
+                                                    }`}
+                                                >
+                                                    {q.correct === oIdx && <i className="fa fa-check text-xs"></i>}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mb-3"><i className="fa fa-info-circle mr-1"></i>Click the circle to mark the correct answer</p>
+
+                                    <div className="border-t border-slate-700 pt-4">
+                                        <label className="text-sm text-slate-400 mb-2 block">
+                                            <i className="fa fa-lightbulb text-yellow-500 mr-2"></i>Explanation (shown after answer)
+                                        </label>
+                                        <textarea
+                                            className="w-full bg-slate-800/50 p-3 rounded-xl border border-slate-700 focus:border-yellow-500 outline-none transition-colors text-sm resize-none"
+                                            placeholder="Add a fun fact, explanation, or additional info that appears after the answer is revealed..."
+                                            rows={2}
+                                            value={q.explanation || ''}
+                                            onChange={e => {
+                                                const qs = [...activeQuiz.questions];
+                                                qs[qIdx].explanation = e.target.value;
+                                                setActiveQuiz({...activeQuiz, questions: qs});
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={() => setActiveQuiz({...activeQuiz, questions: [...activeQuiz.questions, {text: '', options:['','','',''], correct: 0, explanation: ''}]})} className="w-full py-5 border-2 border-dashed border-slate-700 rounded-2xl text-slate-500 hover:border-blue-500 hover:text-blue-400 transition-all">
+                            <i className="fa fa-plus mr-2"></i>Add Question
+                        </button>
+                    </div>
+
+                    {/* Fixed bottom bar */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800 p-4">
+                        <div className="max-w-4xl mx-auto flex gap-4">
+                            <button onClick={() => setView('dash')} className="flex-1 glass py-4 rounded-2xl font-bold hover:bg-slate-800 transition-colors">
+                                <i className="fa fa-times mr-2"></i>Cancel
+                            </button>
+                            <button onClick={handleSave} disabled={saving} className="flex-[2] btn-gradient py-4 rounded-2xl font-bold text-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                                {saving ? <><Spinner size="sm" /> Saving...</> : <><i className="fa fa-save mr-2"></i>Save Quiz</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                );
+            }
+
+            // HOST LOBBY VIEW - Protected
+            if (view === 'host') {
+                if (!user?.email || !isAdmin) { setView('home'); return null; }
+                return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse-slow"></div>
+                        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse-slow"></div>
+                    </div>
+
+                    <div className="relative z-10">
+                        <p className="text-slate-400 uppercase tracking-[0.3em] text-sm mb-2">Join at lecturequiz.pro</p>
+                        <p className="text-slate-500 uppercase tracking-widest text-sm mb-6">Game PIN</p>
+                        <div className="glow rounded-3xl p-4 mb-8">
+                            <h2 className="text-[10rem] leading-none font-black gradient-text animate-float">{session?.pin}</h2>
+                        </div>
+
+                        <p className="text-slate-400 mb-4">{Object.keys(session?.players || {}).length} players joined</p>
+
+                        <div className="flex flex-wrap justify-center gap-3 mb-8 max-w-3xl min-h-[60px]">
+                            {Object.entries(session?.players || {}).map(([uid, name], i) => (
+                                <span key={uid} className="glass px-5 py-2 rounded-full text-lg animate-bounce-in" style={{ animationDelay: `${i * 0.1}s` }}>
+                                    {name}
+                                </span>
+                            ))}
+                        </div>
+
+                        {/* Late join toggle */}
+                        <div className="mb-8">
+                            <button
+                                onClick={toggleLateJoin}
+                                className={`flex items-center gap-3 px-5 py-3 rounded-xl transition-all ${
+                                    session?.allowLateJoin
+                                        ? 'bg-green-600/20 border border-green-500/50 text-green-400'
+                                        : 'bg-slate-800/50 border border-slate-700 text-slate-400'
+                                }`}
+                            >
+                                <i className={`fa ${session?.allowLateJoin ? 'fa-door-open' : 'fa-door-closed'}`}></i>
+                                <span>Late join: {session?.allowLateJoin ? 'Allowed' : 'Blocked'}</span>
+                                <div className={`w-10 h-6 rounded-full p-1 transition-colors ${session?.allowLateJoin ? 'bg-green-600' : 'bg-slate-700'}`}>
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${session?.allowLateJoin ? 'translate-x-4' : ''}`}></div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button onClick={() => {setView('dash'); window.FB.deleteDoc(window.FB.doc(window.FB.db, 'sessions', session.pin));}} className="glass px-8 py-4 rounded-2xl font-semibold hover:bg-slate-800 transition-colors">
+                                <i className="fa fa-times mr-2"></i>Cancel
+                            </button>
+                            <button
+                                onClick={startGame}
+                                disabled={Object.keys(session?.players || {}).length === 0}
+                                className="btn-gradient px-12 py-4 rounded-2xl font-bold text-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <i className="fa fa-play mr-3"></i>Start Game
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                );
+            }
+
+            // HOST PLAYING VIEW - Protected
+            if (view === 'play-host') {
+                if (!user?.email || !isAdmin) { setView('home'); return null; }
+                const question = session?.quiz?.questions?.[currentQuestion];
+                const answeredCount = Object.keys(session?.answers || {}).length;
+                const totalPlayers = Object.keys(session?.players || {}).length;
+
+                if (gamePhase === 'final') {
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <Confetti show={true} />
+                            <h2 className="text-5xl font-black gradient-text mb-8 animate-bounce-in">Final Results!</h2>
+                            <div className="glass rounded-3xl p-8 w-full max-w-2xl mb-8">
+                                {leaderboard.slice(0, 5).map((player, idx) => (
+                                    <div key={player.uid} className="flex items-center gap-4 p-4 border-b border-slate-800 last:border-0 animate-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+                                        <span className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${
+                                            idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-400 text-black' : idx === 2 ? 'bg-amber-700' : 'bg-slate-800'
+                                        }`}>
+                                            {idx === 0 ? <i className="fa fa-crown"></i> : idx + 1}
+                                        </span>
+                                        <span className="flex-grow text-left text-xl font-semibold">{player.name}</span>
+                                        <span className="text-2xl font-bold text-blue-400">{player.score}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={endGame} className="btn-gradient px-12 py-4 rounded-2xl font-bold text-xl">
+                                <i className="fa fa-home mr-2"></i>End Session
+                            </button>
+                        </div>
+                    );
+                }
+
+                if (gamePhase === 'results') {
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <h2 className="text-3xl font-bold mb-2">Question {currentQuestion + 1} Results</h2>
+                            <p className="text-slate-400 mb-4">Correct answer: <span className="text-green-400 font-semibold">{question?.options[question?.correct]}</span></p>
+
+                            {question?.explanation && (
+                                <div className="glass rounded-2xl p-5 w-full max-w-2xl mb-6 text-left border border-yellow-500/30 animate-slide-up">
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa fa-lightbulb text-yellow-500"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-yellow-500 text-sm font-semibold mb-1">Did you know?</p>
+                                            <p className="text-slate-300">{question.explanation}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="glass rounded-3xl p-6 w-full max-w-2xl mb-8">
+                                <h3 className="text-xl font-bold mb-4"><i className="fa fa-trophy text-yellow-500 mr-2"></i>Leaderboard</h3>
+                                {leaderboard.slice(0, 5).map((player, idx) => (
+                                    <div key={player.uid} className="flex items-center gap-4 p-3 border-b border-slate-800 last:border-0">
+                                        <span className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold">{idx + 1}</span>
+                                        <span className="flex-grow text-left font-semibold">{player.name}</span>
+                                        <span className="font-bold text-blue-400">{player.score} pts</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button onClick={nextQuestion} className="btn-gradient px-12 py-4 rounded-2xl font-bold text-xl">
+                                {currentQuestion + 1 >= session?.quiz?.questions?.length ? (
+                                    <><i className="fa fa-flag-checkered mr-2"></i>Final Results</>
+                                ) : (
+                                    <><i className="fa fa-arrow-right mr-2"></i>Next Question</>
+                                )}
+                            </button>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="min-h-screen flex flex-col p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
+                            <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
+                        </div>
+
+                        <TimerBar duration={20} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime} />
+
+                        <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
+                            <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>
+
+                            <div className="grid grid-cols-2 gap-4 w-full max-w-4xl">
+                                {question?.options.map((opt, idx) => (
+                                    <div key={idx} className={`${optionColors[idx].bg} p-6 rounded-2xl flex items-center gap-4`}>
+                                        <i className={`fa ${optionColors[idx].icon} text-2xl opacity-75`}></i>
+                                        <span className="text-xl font-semibold">{opt}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button onClick={showQuestionResults} className="glass px-8 py-3 rounded-xl font-semibold self-center hover:bg-slate-800 transition-colors">
+                            <i className="fa fa-forward mr-2"></i>Show Results
+                        </button>
+                    </div>
+                );
+            }
+
+            // JOIN VIEW
+            if (view === 'join') return (
+                <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <div className="glass p-10 rounded-3xl w-full max-w-md shadow-2xl animate-bounce-in relative z-10">
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                                <i className="fa fa-gamepad text-2xl"></i>
+                            </div>
+                            <h2 className="text-3xl font-bold">Join Game</h2>
+                            <p className="text-slate-500">Enter the PIN shown on screen</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <input
+                                className="w-full glass p-5 rounded-xl text-center text-4xl font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                placeholder="PIN"
+                                maxLength={4}
+                                value={joinForm.pin}
+                                onChange={e => setJoinForm({...joinForm, pin: e.target.value.replace(/\D/g, '')})}
+                            />
+                            <input
+                                className="w-full glass p-4 rounded-xl text-center text-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                placeholder="Your Nickname"
+                                maxLength={20}
+                                value={joinForm.name}
+                                onChange={e => setJoinForm({...joinForm, name: e.target.value})}
+                            />
+                            <button
+                                onClick={handleJoin}
+                                disabled={loading || !joinForm.pin || !joinForm.name.trim()}
+                                className="w-full btn-gradient py-4 rounded-xl font-bold text-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {loading ? <><Spinner size="sm" /> Joining...</> : <><i className="fa fa-sign-in-alt mr-2"></i>Enter Game</>}
+                            </button>
+                            <button onClick={() => {localStorage.removeItem('quizSession'); setView('home'); setJoinForm({ pin: '', name: '' });}} className="w-full text-slate-500 hover:text-white transition-colors py-2">
+                                <i className="fa fa-arrow-left mr-2"></i>Back
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // PLAYER WAITING VIEW
+            if (view === 'wait') return (
+                <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-3xl animate-pulse-slow"></div>
+                    </div>
+
+                    <div className="relative z-10">
+                        <div className="mb-8 animate-float">
+                            <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                                <i className="fa fa-hourglass-half text-4xl animate-pulse"></i>
+                            </div>
+                        </div>
+                        <h2 className="text-5xl font-black gradient-text mb-4">You're in!</h2>
+                        <p className="text-2xl text-slate-300 mb-2">{joinForm.name}</p>
+                        <p className="text-slate-500 text-lg">Waiting for the host to start...</p>
+
+                        <div className="mt-8 flex gap-2 justify-center">
+                            <span className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0s' }}></span>
+                            <span className="w-3 h-3 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                            <span className="w-3 h-3 rounded-full bg-pink-500 animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // PLAYER PLAYING VIEW
+            if (view === 'play-player') {
+                const question = session?.quiz?.questions?.[currentQuestion];
+
+                if (gamePhase === 'final') {
+                    const myRank = leaderboard.findIndex(p => p.uid === user?.uid) + 1;
+                    const myScore = scores[user?.uid] || 0;
+
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <Confetti show={myRank <= 3} />
+                            <div className="mb-8">
+                                {myRank === 1 ? (
+                                    <div className="w-32 h-32 mx-auto rounded-full bg-yellow-500 flex items-center justify-center animate-bounce-in">
+                                        <i className="fa fa-crown text-6xl text-black"></i>
+                                    </div>
+                                ) : myRank <= 3 ? (
+                                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center animate-bounce-in">
+                                        <i className="fa fa-medal text-6xl"></i>
+                                    </div>
+                                ) : (
+                                    <div className="w-32 h-32 mx-auto rounded-full bg-slate-800 flex items-center justify-center animate-bounce-in">
+                                        <i className="fa fa-star text-6xl text-slate-600"></i>
+                                    </div>
+                                )}
+                            </div>
+
+                            <h2 className="text-5xl font-black gradient-text mb-4">
+                                {myRank === 1 ? 'You Won!' : myRank <= 3 ? 'Great Job!' : 'Game Over!'}
+                            </h2>
+                            <p className="text-3xl text-slate-300 mb-2">#{myRank} Place</p>
+                            <p className="text-xl text-slate-500 mb-8">{myScore} points</p>
+
+                            <button onClick={() => {localStorage.removeItem('quizSession'); setView('home'); setSession(null); setJoinForm({ pin: '', name: '' });}} className="btn-gradient px-8 py-4 rounded-2xl font-bold">
+                                <i className="fa fa-home mr-2"></i>Back to Home
+                            </button>
+                        </div>
+                    );
+                }
+
+                if (gamePhase === 'results') {
+                    const myAnswer = session?.answers?.[user?.uid];
+                    const wasCorrect = myAnswer === question?.correct;
+
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <Confetti show={showConfetti} />
+                            <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-bounce-in ${wasCorrect ? 'bg-green-600' : 'bg-red-600'}`}>
+                                <i className={`fa ${wasCorrect ? 'fa-check' : 'fa-times'} text-5xl`}></i>
+                            </div>
+                            <h2 className="text-3xl font-bold mb-2">{wasCorrect ? 'Correct!' : 'Wrong!'}</h2>
+                            {!wasCorrect && (
+                                <p className="text-slate-400 mb-2">Correct answer: <span className="text-green-400">{question?.options[question?.correct]}</span></p>
+                            )}
+                            <p className="text-2xl text-blue-400 font-bold mb-4">{scores[user?.uid] || 0} pts</p>
+
+                            {question?.explanation && (
+                                <div className="glass rounded-2xl p-4 w-full max-w-md text-left border border-yellow-500/30 animate-slide-up mb-4">
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                                            <i className="fa fa-lightbulb text-yellow-500 text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-yellow-500 text-xs font-semibold mb-1">Did you know?</p>
+                                            <p className="text-slate-300 text-sm">{question.explanation}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-slate-500 text-sm">Waiting for next question...</p>
+                        </div>
+                    );
+                }
+
+                if (answered) {
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center mb-6 animate-pulse">
+                                <i className="fa fa-check text-4xl"></i>
+                            </div>
+                            <h2 className="text-3xl font-bold mb-2">Answer Submitted!</h2>
+                            <p className="text-slate-500">Let's see if you got it right...</p>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="min-h-screen flex flex-col p-4">
+                        <div className="mb-4">
+                            <TimerBar duration={20} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={session?.questionStartTime} />
+                        </div>
+
+                        <div className="text-center mb-6">
+                            <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
+                            <h2 className="text-2xl font-bold">{question?.text}</h2>
+                        </div>
+
+                        <div className="flex-grow grid grid-cols-2 gap-3">
+                            {question?.options.map((opt, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => submitAnswer(idx)}
+                                    className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95`}
+                                >
+                                    <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
+                                    <span className="text-lg font-semibold text-center">{opt}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+                return null;
+            };
+
+            // Render content and Toast together
+            return (
+                <>
+                    {renderContent()}
+                    {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+                    <Confetti show={showConfetti} />
+                </>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+creation_rules:
+  # Encrypt quiz files with age (using SSH key converted to age format)
+  - path_regex: quizzes/.*\.json$
+    age: age1xvyyrsdr737z43cf8twgzpkhdkzrpg2zhd4ygjf2u4pslgmdms6qtuqlv2

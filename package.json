@@ -1,0 +1,32 @@
+{
+  "name": "lecturequiz-pro",
+  "version": "1.0.0",
+  "description": "Interactive live quizzes for modern classrooms",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:report": "npx playwright show-report",
+    "test:home": "npx playwright test home.spec.js",
+    "test:auth": "npx playwright test auth.spec.js",
+    "test:student": "npx playwright test student.spec.js",
+    "test:ui-components": "npx playwright test ui.spec.js",
+    "test:a11y": "npx playwright test accessibility.spec.js",
+    "deploy": "firebase deploy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cre-eD/quiz.git"
+  },
+  "keywords": ["quiz", "firebase", "react", "education"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Cre-eD/quiz/issues"
+  },
+  "homepage": "https://github.com/Cre-eD/quiz#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
+  }
+}
