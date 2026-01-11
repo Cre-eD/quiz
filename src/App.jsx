@@ -755,6 +755,23 @@ function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView
 function DashboardView(props) {
   const { user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
 
+  const [quizSort, setQuizSort] = useState('title-asc')
+
+  const sortedQuizzes = [...quizzes].sort((a, b) => {
+    switch (quizSort) {
+      case 'title-asc':
+        return a.title.localeCompare(b.title)
+      case 'title-desc':
+        return b.title.localeCompare(a.title)
+      case 'questions-asc':
+        return (a.questions?.length || 0) - (b.questions?.length || 0)
+      case 'questions-desc':
+        return (b.questions?.length || 0) - (a.questions?.length || 0)
+      default:
+        return 0
+    }
+  })
+
   const hasGoogleAuth = user && user.email
   const isAuthorized = hasGoogleAuth && isAdmin
 
@@ -801,13 +818,29 @@ function DashboardView(props) {
 
       {dashTab === 'quizzes' && (
         <>
-          <div className="flex justify-end gap-3 mb-6">
-            <button onClick={() => setShowImport(true)} className="glass px-5 py-3 rounded-xl text-blue-400 hover:text-blue-300 transition-colors">
-              <i className="fa fa-file-import mr-2"></i>Import
-            </button>
-            <button onClick={() => {setActiveQuiz({ title: 'New Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-6 py-3 rounded-xl font-bold">
-              <i className="fa fa-plus mr-2"></i>Create
-            </button>
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 text-sm">Sort:</span>
+              <select
+                value={quizSort}
+                onChange={(e) => setQuizSort(e.target.value)}
+                className="glass px-3 py-2 rounded-lg text-sm bg-slate-800 border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="title-asc">Title A-Z</option>
+                <option value="title-desc">Title Z-A</option>
+                <option value="questions-desc">Most Questions</option>
+                <option value="questions-asc">Least Questions</option>
+              </select>
+              <span className="text-slate-600 text-sm ml-2">{quizzes.length} quizzes</span>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowImport(true)} className="glass px-5 py-3 rounded-xl text-blue-400 hover:text-blue-300 transition-colors">
+                <i className="fa fa-file-import mr-2"></i>Import
+              </button>
+              <button onClick={() => {setActiveQuiz({ title: 'New Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-6 py-3 rounded-xl font-bold">
+                <i className="fa fa-plus mr-2"></i>Create
+              </button>
+            </div>
           </div>
 
           {showImport && (
@@ -842,7 +875,7 @@ function DashboardView(props) {
             </div>
           ) : (
             <div className="grid gap-4">
-              {quizzes.map((q, idx) => (
+              {sortedQuizzes.map((q, idx) => (
                 <div key={q.id} className="glass p-6 rounded-2xl card-hover flex justify-between items-center animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center font-bold text-lg">
