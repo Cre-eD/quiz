@@ -43,9 +43,11 @@ export default function App() {
   const [gamePhase, setGamePhase] = useState('lobby')
   const [reactions, setReactions] = useState([])
   const [badges, setBadges] = useState({})
+  const [myReactionCount, setMyReactionCount] = useState(0)
 
-  // Reaction emojis
-  const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏']
+  // Reaction config
+  const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏', '😂', '🤯', '💀', '🎉', '❤️']
+  const MAX_REACTIONS_PER_QUESTION = 5
 
   // Badge definitions
   const badgeTypes = {
@@ -264,6 +266,7 @@ export default function App() {
           if (newPhase === 'question' && gamePhase !== 'question') {
             setAnswered(false)
             setPlayerAnswer(null)
+            setMyReactionCount(0) // Reset reaction limit for new question
           }
           if (newPhase === 'results') {
             const myScore = data.scores?.[user?.uid] || 0
@@ -447,7 +450,7 @@ export default function App() {
 
   const startGame = async () => {
     await updateDoc(doc(db, 'sessions', session.pin), {
-      status: 'question', currentQuestion: 0, answers: {}, questionStartTime: Date.now()
+      status: 'question', currentQuestion: 0, answers: {}, questionStartTime: Date.now(), reactions: []
     })
     setView('play-host')
   }
@@ -459,10 +462,10 @@ export default function App() {
   const nextQuestion = async () => {
     const nextQ = currentQuestion + 1
     if (nextQ >= session.quiz.questions.length) {
-      await updateDoc(doc(db, 'sessions', session.pin), { status: 'final' })
+      await updateDoc(doc(db, 'sessions', session.pin), { status: 'final', reactions: [] })
     } else {
       await updateDoc(doc(db, 'sessions', session.pin), {
-        status: 'question', currentQuestion: nextQ, answers: {}, questionStartTime: Date.now()
+        status: 'question', currentQuestion: nextQ, answers: {}, questionStartTime: Date.now(), reactions: []
       })
     }
   }
@@ -487,6 +490,10 @@ export default function App() {
 
   const sendReaction = async (emoji) => {
     if (!session?.pin || !user?.uid) return
+    // Rate limit: max 5 reactions per question
+    if (myReactionCount >= MAX_REACTIONS_PER_QUESTION) return
+
+    setMyReactionCount(prev => prev + 1)
     const playerName = session.players?.[user.uid] || 'Player'
     const reaction = {
       id: Date.now() + Math.random(),
@@ -494,9 +501,9 @@ export default function App() {
       playerName,
       timestamp: Date.now()
     }
-    // Add reaction to array (keep last 20)
+    // Add reaction to array (keep last 15 for display)
     const currentReactions = session.reactions || []
-    const newReactions = [...currentReactions, reaction].slice(-20)
+    const newReactions = [...currentReactions, reaction].slice(-15)
     await updateDoc(doc(db, 'sessions', session.pin), { reactions: newReactions })
   }
 
@@ -574,7 +581,7 @@ export default function App() {
       {view === 'host' && <HostLobbyView {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, db, deleteDoc, doc }} />}
       {view === 'play-host' && <HostPlayView {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }} />}
       {view === 'wait' && <WaitView joinForm={joinForm} />}
-      {view === 'play-player' && <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, showConfetti, setView, setSession, setJoinForm }} />}
+      {view === 'play-player' && <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm }} />}
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <Confetti show={showConfetti} />
     </>
@@ -1095,15 +1102,16 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
   const answeredCount = Object.keys(session?.answers || {}).length
   const totalPlayers = Object.keys(session?.players || {}).length
 
-  // Floating reactions component
+  // Floating reactions component - shows last 10 reactions
   const FloatingReactions = () => {
-    const recentReactions = (reactions || []).filter(r => Date.now() - r.timestamp < 5000)
+    const recentReactions = (reactions || []).slice(-10)
+    if (recentReactions.length === 0) return null
     return (
-      <div className="fixed top-20 right-4 flex flex-col gap-2 pointer-events-none z-50">
-        {recentReactions.map(r => (
-          <div key={r.id} className="animate-bounce-in bg-slate-800/90 px-3 py-2 rounded-full flex items-center gap-2">
-            <span className="text-2xl">{r.emoji}</span>
-            <span className="text-sm text-slate-300">{r.playerName}</span>
+      <div className="fixed top-20 right-4 flex flex-col gap-2 pointer-events-none z-50 max-h-96 overflow-hidden">
+        {recentReactions.map((r, i) => (
+          <div key={r.id || i} className="animate-slide-up bg-slate-800/95 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg border border-slate-700">
+            <span className="text-3xl">{r.emoji}</span>
+            <span className="text-sm text-slate-200 font-medium">{r.playerName}</span>
           </div>
         ))}
       </div>
@@ -1157,6 +1165,7 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
   if (gamePhase === 'results') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <FloatingReactions />
         <h2 className="text-3xl font-bold mb-2">Question {currentQuestion + 1} Results</h2>
         <p className="text-slate-400 mb-4">Correct answer: <span className="text-green-400 font-semibold">{question?.options[question?.correct]}</span></p>
 
@@ -1260,12 +1269,15 @@ function WaitView({ joinForm }) {
   )
 }
 
-function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, showConfetti, setView, setSession, setJoinForm }) {
+function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm }) {
+  const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
+  const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
   const myStreak = streaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
-  const [questionStartTime] = useState(Date.now())
+  // Use session's questionStartTime for accurate speed tracking
+  const questionStartTime = session?.questionStartTime || Date.now()
 
   // My badges display
   const MyBadges = () => {
@@ -1373,20 +1385,27 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
           <i className="fa fa-check text-4xl"></i>
         </div>
         <h2 className="text-3xl font-bold mb-2">Answer Submitted!</h2>
-        <p className="text-slate-500 mb-6">Let's see if you got it right...</p>
+        <p className="text-slate-500 mb-4">Let's see if you got it right...</p>
 
         {/* Reaction buttons while waiting */}
-        <div className="flex gap-2">
-          {reactionEmojis.map(emoji => (
-            <button
-              key={emoji}
-              onClick={() => sendReaction(emoji)}
-              className="text-3xl p-2 hover:scale-125 transition-transform active:scale-95"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+        {canReact ? (
+          <>
+            <p className="text-slate-600 text-sm mb-2">Send a reaction ({reactionsLeft} left):</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {reactionEmojis.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={(e) => { e.stopPropagation(); sendReaction(emoji); }}
+                  className="text-2xl p-2 hover:scale-125 transition-transform active:scale-90 bg-slate-800/50 rounded-lg"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-slate-600 text-sm">Reaction limit reached for this question</p>
+        )}
       </div>
     )
   }
@@ -1426,18 +1445,20 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
         ))}
       </div>
 
-      {/* Reaction buttons during question */}
-      <div className="flex justify-center gap-2 mt-4 pt-4 border-t border-slate-800">
-        {reactionEmojis.map(emoji => (
-          <button
-            key={emoji}
-            onClick={() => sendReaction(emoji)}
-            className="text-2xl p-2 hover:scale-125 transition-transform active:scale-95"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
+      {/* Reaction buttons - compact bar at bottom */}
+      {canReact && (
+        <div className="flex justify-center gap-1 mt-3 pt-2 border-t border-slate-800/50 overflow-x-auto">
+          {reactionEmojis.map(emoji => (
+            <button
+              key={emoji}
+              onClick={(e) => { e.stopPropagation(); sendReaction(emoji); }}
+              className="text-xl p-1.5 hover:scale-110 transition-transform active:scale-90 flex-shrink-0 opacity-60 hover:opacity-100"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

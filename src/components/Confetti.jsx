@@ -1,17 +1,31 @@
+import { useMemo } from 'react'
+
 export default function Confetti({ show }) {
+  // Pre-generate particles to avoid re-renders causing lag
+  const particles = useMemo(() => {
+    const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b']
+    return [...Array(25)].map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      delay: `${Math.random() * 0.3}s`
+    }))
+  }, [])
+
   if (!show) return null
-  const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b']
+
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-40">
-      {[...Array(50)].map((_, i) => (
+      {particles.map(p => (
         <div
-          key={i}
+          key={p.id}
           className="particle"
           style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            backgroundColor: colors[Math.floor(Math.random() * colors.length)],
-            animationDelay: `${Math.random() * 0.5}s`
+            left: p.left,
+            top: p.top,
+            backgroundColor: p.color,
+            animationDelay: p.delay
           }}
         />
       ))}
