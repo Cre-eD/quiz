@@ -1,18 +1,10 @@
 {
   "hosting": {
-    "public": ".",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**",
-      "**/tests/**",
-      "**/test-results/**",
-      "**/playwright-report/**",
-      "playwright.config.js",
-      "package.json",
-      "package-lock.json",
-      "TESTS.md",
-      "**/*.spec.js"
+      "**/node_modules/**"
     ],
     "rewrites": [
       {
@@ -31,11 +23,20 @@
         ]
       },
       {
-        "source": "**/*.json",
+        "source": "**/*.js",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=3600"
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "**/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
           }
         ]
       }

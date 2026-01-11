@@ -1,19 +1,18 @@
 {
   "name": "lecturequiz-pro",
   "version": "1.0.0",
+  "type": "module",
   "description": "Interactive live quizzes for modern classrooms",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
-    "test:home": "npx playwright test home.spec.js",
-    "test:auth": "npx playwright test auth.spec.js",
-    "test:student": "npx playwright test student.spec.js",
-    "test:ui-components": "npx playwright test ui.spec.js",
-    "test:a11y": "npx playwright test accessibility.spec.js",
-    "deploy": "firebase deploy"
+    "deploy": "npm run build && firebase deploy"
   },
   "repository": {
     "type": "git",
@@ -26,7 +25,17 @@
     "url": "https://github.com/Cre-eD/quiz/issues"
   },
   "homepage": "https://github.com/Cre-eD/quiz#readme",
+  "dependencies": {
+    "firebase": "^10.8.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.57.0"
+    "@playwright/test": "^1.57.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.0"
   }
 }

@@ -1,5 +1,5 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test'
 
 test.describe('Home Page', () => {
   test.beforeEach(async ({ page }) => {
