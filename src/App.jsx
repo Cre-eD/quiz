@@ -752,25 +752,56 @@ function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView
   )
 }
 
+// Quiz category colors and icons
+const categoryConfig = {
+  pre: { color: 'emerald', icon: 'play-circle', label: 'Pre', bgClass: 'bg-emerald-600/20', textClass: 'text-emerald-400', borderClass: 'border-emerald-500/30' },
+  mid: { color: 'amber', icon: 'pause-circle', label: 'Mid', bgClass: 'bg-amber-600/20', textClass: 'text-amber-400', borderClass: 'border-amber-500/30' },
+  post: { color: 'blue', icon: 'stop-circle', label: 'Post', bgClass: 'bg-blue-600/20', textClass: 'text-blue-400', borderClass: 'border-blue-500/30' }
+}
+
 function DashboardView(props) {
   const { user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
 
-  const [quizSort, setQuizSort] = useState('title-asc')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [expandedLevels, setExpandedLevels] = useState({})
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const sortedQuizzes = [...quizzes].sort((a, b) => {
-    switch (quizSort) {
-      case 'title-asc':
-        return a.title.localeCompare(b.title)
-      case 'title-desc':
-        return b.title.localeCompare(a.title)
-      case 'questions-asc':
-        return (a.questions?.length || 0) - (b.questions?.length || 0)
-      case 'questions-desc':
-        return (b.questions?.length || 0) - (a.questions?.length || 0)
-      default:
-        return 0
-    }
-  })
+  // Group quizzes by level
+  const groupedQuizzes = quizzes.reduce((acc, quiz) => {
+    const level = quiz.level || 0
+    if (!acc[level]) acc[level] = []
+    acc[level].push(quiz)
+    return acc
+  }, {})
+
+  // Sort levels and filter by category
+  const sortedLevels = Object.keys(groupedQuizzes).map(Number).sort((a, b) => a - b)
+
+  // Filter quizzes
+  const getFilteredQuizzes = (levelQuizzes) => {
+    return levelQuizzes
+      .filter(q => categoryFilter === 'all' || q.category === categoryFilter)
+      .filter(q => !searchQuery || q.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => {
+        const order = { pre: 0, mid: 1, post: 2 }
+        return (order[a.category] || 99) - (order[b.category] || 99)
+      })
+  }
+
+  // Count quizzes per category
+  const categoryCounts = quizzes.reduce((acc, q) => {
+    acc[q.category] = (acc[q.category] || 0) + 1
+    return acc
+  }, {})
+
+  // Toggle level expansion
+  const toggleLevel = (level) => {
+    setExpandedLevels(prev => ({ ...prev, [level]: !prev[level] }))
+  }
+
+  // Expand/collapse all
+  const expandAll = () => setExpandedLevels(sortedLevels.reduce((acc, l) => ({ ...acc, [l]: true }), {}))
+  const collapseAll = () => setExpandedLevels({})
 
   const hasGoogleAuth = user && user.email
   const isAuthorized = hasGoogleAuth && isAdmin
@@ -818,87 +849,168 @@ function DashboardView(props) {
 
       {dashTab === 'quizzes' && (
         <>
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-sm">Sort:</span>
-              <select
-                value={quizSort}
-                onChange={(e) => setQuizSort(e.target.value)}
-                className="glass px-3 py-2 rounded-lg text-sm bg-slate-800 border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {/* Search and Filter Bar */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Category Filter Buttons */}
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${categoryFilter === 'all' ? 'bg-slate-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
               >
-                <option value="title-asc">Title A-Z</option>
-                <option value="title-desc">Title Z-A</option>
-                <option value="questions-desc">Most Questions</option>
-                <option value="questions-asc">Least Questions</option>
-              </select>
-              <span className="text-slate-600 text-sm ml-2">{quizzes.length} quizzes</span>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowImport(true)} className="glass px-5 py-3 rounded-xl text-blue-400 hover:text-blue-300 transition-colors">
-                <i className="fa fa-file-import mr-2"></i>Import
+                All <span className="ml-1 text-xs opacity-70">{quizzes.length}</span>
               </button>
-              <button onClick={() => {setActiveQuiz({ title: 'New Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-6 py-3 rounded-xl font-bold">
-                <i className="fa fa-plus mr-2"></i>Create
+              {['pre', 'mid', 'post'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${categoryFilter === cat ? `${categoryConfig[cat].bgClass} ${categoryConfig[cat].textClass}` : 'glass text-slate-400 hover:text-white'}`}
+                >
+                  <i className={`fa fa-${categoryConfig[cat].icon} mr-1`}></i>
+                  {categoryConfig[cat].label} <span className="ml-1 text-xs opacity-70">{categoryCounts[cat] || 0}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <i className="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                <input
+                  type="text"
+                  placeholder="Search quizzes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="glass pl-9 pr-4 py-2 rounded-lg text-sm bg-slate-800/50 border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                />
+              </div>
+              <button onClick={() => setShowImport(true)} className="glass px-4 py-2 rounded-lg text-blue-400 hover:text-blue-300 transition-colors text-sm">
+                <i className="fa fa-file-import mr-1"></i>Import
+              </button>
+              <button onClick={() => {setActiveQuiz({ title: 'New Quiz', questions: [], level: 1, category: 'pre' }); setView('edit');}} className="btn-gradient px-4 py-2 rounded-lg font-semibold text-sm">
+                <i className="fa fa-plus mr-1"></i>Create
               </button>
             </div>
           </div>
 
+          {/* Expand/Collapse Controls */}
+          {sortedLevels.length > 0 && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-slate-500 text-sm">{sortedLevels.length} lectures</span>
+              <button onClick={expandAll} className="text-xs text-slate-400 hover:text-white transition-colors">
+                <i className="fa fa-expand-alt mr-1"></i>Expand All
+              </button>
+              <button onClick={collapseAll} className="text-xs text-slate-400 hover:text-white transition-colors">
+                <i className="fa fa-compress-alt mr-1"></i>Collapse All
+              </button>
+            </div>
+          )}
+
           {showImport && (
-            <div className="mb-8 glass p-6 rounded-3xl animate-slide-up border border-blue-500/30">
+            <div className="mb-6 glass p-6 rounded-2xl animate-slide-up border border-blue-500/30">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold"><i className="fa fa-file-code mr-2 text-blue-500"></i>Import Quiz JSON</h3>
+                <h3 className="text-lg font-bold"><i className="fa fa-file-code mr-2 text-blue-500"></i>Import Quiz JSON</h3>
                 <button onClick={() => setShowImport(false)} className="text-slate-500 hover:text-white"><i className="fa fa-times"></i></button>
               </div>
               <textarea
-                className="w-full h-48 bg-slate-950/50 p-4 font-mono text-sm rounded-xl border border-slate-800 focus:border-blue-500 outline-none mb-4"
-                placeholder='{"title": "My Quiz", "questions": [{"text": "Question?", "options": ["A", "B", "C", "D"], "correct": 0}]}'
+                className="w-full h-40 bg-slate-950/50 p-4 font-mono text-sm rounded-xl border border-slate-800 focus:border-blue-500 outline-none mb-4"
+                placeholder='{"title": "L1: Topic — Pre-Quiz", "level": 1, "category": "pre", "questions": [...]}'
                 value={importText}
                 onChange={e => setImportText(e.target.value)}
               />
               <div className="flex justify-end gap-3">
-                <button onClick={() => {setShowImport(false); setImportText('');}} className="px-5 py-2 text-slate-400 hover:text-white">Cancel</button>
-                <button onClick={handleImport} className="btn-gradient px-6 py-2 rounded-lg font-semibold">Import Now</button>
+                <button onClick={() => {setShowImport(false); setImportText('');}} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancel</button>
+                <button onClick={handleImport} className="btn-gradient px-5 py-2 rounded-lg font-semibold text-sm">Import</button>
               </div>
             </div>
           )}
 
           {quizzes.length === 0 ? (
-            <div className="glass rounded-3xl p-16 text-center">
-              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-slate-800 flex items-center justify-center">
-                <i className="fa fa-folder-open text-4xl text-slate-600"></i>
+            <div className="glass rounded-2xl p-12 text-center">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
+                <i className="fa fa-folder-open text-3xl text-slate-600"></i>
               </div>
-              <h3 className="text-2xl font-bold mb-2">No quizzes yet</h3>
-              <p className="text-slate-500 mb-6">Create your first quiz or import one</p>
-              <button onClick={() => {setActiveQuiz({ title: 'My First Quiz', questions: [] }); setView('edit');}} className="btn-gradient px-8 py-3 rounded-xl font-bold">
-                <i className="fa fa-plus mr-2"></i>Create Your First Quiz
+              <h3 className="text-xl font-bold mb-2">No quizzes yet</h3>
+              <p className="text-slate-500 mb-4 text-sm">Create your first quiz or import one</p>
+              <button onClick={() => {setActiveQuiz({ title: 'My First Quiz', questions: [], level: 1, category: 'pre' }); setView('edit');}} className="btn-gradient px-6 py-2 rounded-xl font-bold text-sm">
+                <i className="fa fa-plus mr-2"></i>Create Quiz
               </button>
             </div>
           ) : (
-            <div className="grid gap-4">
-              {sortedQuizzes.map((q, idx) => (
-                <div key={q.id} className="glass p-6 rounded-2xl card-hover flex justify-between items-center animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center font-bold text-lg">
-                      {q.title.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <span className="text-xl font-bold block">{q.title}</span>
-                      <span className="text-sm text-slate-500"><i className="fa fa-question-circle mr-1"></i>{q.questions?.length || 0} Questions</span>
-                    </div>
+            <div className="space-y-3">
+              {sortedLevels.map(level => {
+                const levelQuizzes = getFilteredQuizzes(groupedQuizzes[level] || [])
+                if (levelQuizzes.length === 0) return null
+
+                const isExpanded = expandedLevels[level]
+                const firstQuiz = groupedQuizzes[level][0]
+                const levelTitle = firstQuiz?.title?.match(/L\d+:\s*([^—]+)/)?.[1]?.trim() || `Lecture ${level}`
+
+                return (
+                  <div key={level} className="glass rounded-2xl overflow-hidden">
+                    {/* Level Header */}
+                    <button
+                      onClick={() => toggleLevel(level)}
+                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-sm">
+                          L{level}
+                        </div>
+                        <div className="text-left">
+                          <span className="font-semibold block">{levelTitle}</span>
+                          <span className="text-xs text-slate-500">{levelQuizzes.length} quiz{levelQuizzes.length !== 1 ? 'zes' : ''}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Category badges preview */}
+                        <div className="hidden sm:flex gap-1">
+                          {['pre', 'mid', 'post'].map(cat => {
+                            const hasCategory = groupedQuizzes[level]?.some(q => q.category === cat)
+                            if (!hasCategory) return null
+                            return (
+                              <span key={cat} className={`px-2 py-0.5 rounded text-xs ${categoryConfig[cat].bgClass} ${categoryConfig[cat].textClass}`}>
+                                {categoryConfig[cat].label}
+                              </span>
+                            )
+                          })}
+                        </div>
+                        <i className={`fa fa-chevron-${isExpanded ? 'up' : 'down'} text-slate-500 ml-2`}></i>
+                      </div>
+                    </button>
+
+                    {/* Level Quizzes */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 space-y-2">
+                        {levelQuizzes.map((q) => {
+                          const catConf = categoryConfig[q.category] || categoryConfig.pre
+                          return (
+                            <div key={q.id} className={`p-4 rounded-xl border ${catConf.borderClass} bg-slate-900/50 flex justify-between items-center group hover:bg-slate-800/50 transition-colors`}>
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${catConf.bgClass} ${catConf.textClass} shrink-0`}>
+                                  {catConf.label}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="font-medium block truncate">{q.title}</span>
+                                  <span className="text-xs text-slate-500">{q.questions?.length || 0} questions</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => handleLaunch(q)} className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-1.5 rounded-lg font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all">
+                                  <i className="fa fa-play mr-1"></i>Launch
+                                </button>
+                                <button onClick={() => {setActiveQuiz(q); setView('edit');}} className="bg-slate-700 p-1.5 px-3 rounded-lg hover:bg-slate-600 transition-colors text-sm">
+                                  <i className="fa fa-edit"></i>
+                                </button>
+                                <button onClick={() => handleDelete(q)} className="text-red-500 hover:text-red-400 p-1.5 px-2 transition-colors text-sm">
+                                  <i className="fa fa-trash"></i>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleLaunch(q)} className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-2 rounded-xl font-bold hover:from-green-500 hover:to-emerald-500 transition-all">
-                      <i className="fa fa-play mr-2"></i>Launch
-                    </button>
-                    <button onClick={() => {setActiveQuiz(q); setView('edit');}} className="bg-slate-800 p-2 px-4 rounded-xl hover:bg-slate-700 transition-colors">
-                      <i className="fa fa-edit"></i>
-                    </button>
-                    <button onClick={() => handleDelete(q)} className="text-red-500 hover:text-red-400 p-2 px-3 transition-colors">
-                      <i className="fa fa-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </>

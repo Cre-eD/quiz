@@ -1,43 +1,55 @@
 # Quizzes
 
-Encrypted quiz storage using SOPS + age with SSH key.
+48 encrypted quiz files (16 lectures x 3 types) using SOPS + age.
+
+## File Naming
+
+```
+lec{N}_{type}.enc.json
+```
+
+- `N` = Lecture number (1-16)
+- `type` = pre, mid, or post
 
 ## Usage
 
-### View/Edit encrypted quiz
 ```bash
-# Open in your editor (auto-decrypts)
-sops quizzes/devops-quiz.enc.json
+# Decrypt for editing
+sops quizzes/lec1_pre.enc.json
 
 # Or decrypt to file
-sops -d quizzes/devops-quiz.enc.json > quizzes/devops-quiz.json
+sops -d quizzes/lec1_pre.enc.json > quizzes/lec1_pre.json
+
+# Re-encrypt after editing
+sops -e --output quizzes/lec1_pre.enc.json quizzes/lec1_pre.json
+rm quizzes/lec1_pre.json
 ```
 
-### Create new quiz
+## CLI Commands
+
 ```bash
-# 1. Create unencrypted JSON
+# Upload all quizzes to Firestore
+npm run upload-all
+
+# Upload specific quiz
+npm run upload-quiz -- quizzes/lec1_pre.json
+
+# List quizzes in Firestore
+npm run list-quizzes
+
+# Download quizzes from Firestore
+node scripts/download-quizzes.js
+```
+
+## Quiz Structure
+
+```json
 {
-  "title": "My New Quiz",
+  "title": "L1: DevOps Introduction — Pre-Quiz",
+  "level": 1,
+  "category": "pre",
   "questions": [...]
 }
-
-# 2. Encrypt it
-sops -e --output quizzes/my-new-quiz.enc.json quizzes/my-new-quiz.json
-
-# 3. Delete unencrypted version
-rm quizzes/my-new-quiz.json
-
-# Or use the helper script
-../scripts/quiz-encrypt.sh quizzes/my-new-quiz.json
-```
-
-### Helper scripts
-```bash
-# Encrypt
-../scripts/quiz-encrypt.sh quizzes/quiz.json
-
-# Decrypt
-../scripts/quiz-decrypt.sh quizzes/quiz.enc.json
 ```
 
 ## File naming

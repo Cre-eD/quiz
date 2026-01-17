@@ -12,7 +12,10 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
-    "deploy": "npm run build && firebase deploy"
+    "deploy": "npm run build && firebase deploy",
+    "upload-quiz": "node scripts/upload-quiz.js",
+    "upload-all": "node scripts/upload-quiz.js --all",
+    "list-quizzes": "node scripts/upload-quiz.js --list"
   },
   "repository": {
     "type": "git",
@@ -40,6 +43,8 @@
     "@playwright/test": "^1.57.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
+    "firebase-admin": "^12.0.0",
+    "glob": "^10.3.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.0"
