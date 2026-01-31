@@ -63,6 +63,7 @@ export default function App() {
   const [myReactionCount, setMyReactionCount] = useState(0)
   const [shakeScreen, setShakeScreen] = useState(false)
   const [scorePopKey, setScorePopKey] = useState(0)
+  const prevGamePhaseRef = useRef('lobby') // Track previous phase to detect transitions
 
   // Reaction config
   const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏', '😂', '🤯', '💀', '🎉', '❤️']
@@ -315,7 +316,8 @@ export default function App() {
           setSession(data)
           const newPhase = data.status || 'lobby'
 
-          if (newPhase === 'question' && gamePhase !== 'question') {
+          // Use ref to detect phase transitions (avoids stale closure issues)
+          if (newPhase === 'question' && prevGamePhaseRef.current !== 'question') {
             setAnswered(false)
             setPlayerAnswer(null)
             setMyReactionCount(0) // Reset reaction limit for new question
@@ -329,15 +331,18 @@ export default function App() {
             }
           }
 
+          // Transition from lobby to play view
+          if (newPhase === 'question' && prevGamePhaseRef.current === 'lobby') {
+            setView('play-player')
+          }
+
+          // Update ref and state
+          prevGamePhaseRef.current = newPhase
           setGamePhase(newPhase)
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
           if (data.badges) setBadges(data.badges)
-
-          if (newPhase === 'question' && gamePhase === 'lobby') {
-            setView('play-player')
-          }
         }
       })
     }
@@ -477,6 +482,7 @@ export default function App() {
 
       if (sessionData.status !== 'lobby') {
         setView('play-player')
+        prevGamePhaseRef.current = sessionData.status
         setGamePhase(sessionData.status)
         setCurrentQuestion(sessionData.currentQuestion || 0)
         showToast("Joined! Catching up...", "info")
@@ -506,8 +512,8 @@ export default function App() {
           setJoinForm({ pin, name })
 
           if (data.status === 'lobby') setView('wait')
-          else if (data.status === 'final') { setView('play-player'); setGamePhase('final') }
-          else { setView('play-player'); setGamePhase(data.status) }
+          else if (data.status === 'final') { setView('play-player'); prevGamePhaseRef.current = 'final'; setGamePhase('final') }
+          else { setView('play-player'); prevGamePhaseRef.current = data.status; setGamePhase(data.status) }
           showToast("Session restored!", "info")
         } else {
           localStorage.removeItem('quizSession')
