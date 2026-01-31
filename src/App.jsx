@@ -45,6 +45,8 @@ export default function App() {
   const [dashTab, setDashTab] = useState('quizzes')
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [newLeaderboardName, setNewLeaderboardName] = useState('')
+  const [renamingLeaderboard, setRenamingLeaderboard] = useState(null)
+  const [renameLeaderboardName, setRenameLeaderboardName] = useState('')
   const [viewingLeaderboard, setViewingLeaderboard] = useState(null)
   const [launchingQuiz, setLaunchingQuiz] = useState(null)
 
@@ -225,6 +227,28 @@ export default function App() {
     })
   }
 
+  const renameLeaderboard = async (lb) => {
+    setRenamingLeaderboard(lb)
+    setRenameLeaderboardName(lb.name)
+  }
+
+  const confirmRenameLeaderboard = async () => {
+    if (!renameLeaderboardName.trim()) {
+      showToast("Please enter a leaderboard name", "error")
+      return
+    }
+    try {
+      await updateDoc(doc(db, 'leaderboards', renamingLeaderboard.id), {
+        name: renameLeaderboardName.trim()
+      })
+      showToast("Leaderboard renamed!")
+      setRenamingLeaderboard(null)
+      setRenameLeaderboardName('')
+    } catch (e) {
+      showToast("Failed to rename leaderboard", "error")
+    }
+  }
+
   const saveToLeaderboard = async (leaderboardId, sessionPlayers, sessionScores) => {
     if (!leaderboardId) return
     try {
@@ -317,7 +341,7 @@ export default function App() {
         }
       })
     }
-  }, [view, session?.pin, gamePhase, user?.uid, scores])
+  }, [view, session?.pin, user?.uid])
 
   const handleImport = () => {
     try {
@@ -625,7 +649,11 @@ export default function App() {
 
   const leaderboard = Object.entries(scores)
     .map(([uid, score]) => ({ uid, score, name: session?.players?.[uid] || 'Unknown' }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      // Stable tie-breaker: alphabetical by name
+      return a.name.localeCompare(b.name)
+    })
 
   const getLeaderboardPlayers = (lb) => {
     if (!lb?.players) return []
@@ -1054,6 +1082,9 @@ function DashboardView(props) {
                       <button onClick={() => setViewingLeaderboard(lb)} className="bg-slate-800 px-5 py-2 rounded-xl font-semibold hover:bg-slate-700 transition-colors">
                         <i className="fa fa-eye mr-2"></i>View Top 20
                       </button>
+                      <button onClick={() => renameLeaderboard(lb)} className="bg-blue-600/20 text-blue-400 px-4 py-2 rounded-xl hover:bg-blue-600/30 transition-colors">
+                        <i className="fa fa-edit"></i>
+                      </button>
                       <button onClick={() => flushLeaderboard(lb)} className="bg-yellow-600/20 text-yellow-500 px-4 py-2 rounded-xl hover:bg-yellow-600/30 transition-colors">
                         <i className="fa fa-redo"></i>
                       </button>
@@ -1084,6 +1115,26 @@ function DashboardView(props) {
             <div className="flex gap-3">
               <button onClick={() => {setShowLeaderboardModal(false); setNewLeaderboardName('');}} className="flex-1 bg-slate-800 py-3 rounded-xl font-semibold hover:bg-slate-700">Cancel</button>
               <button onClick={createLeaderboard} className="flex-1 bg-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-500">Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renamingLeaderboard && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="glass p-8 rounded-3xl max-w-md w-full mx-4 animate-bounce-in">
+            <h3 className="text-2xl font-bold mb-4"><i className="fa fa-edit text-blue-500 mr-2"></i>Rename Leaderboard</h3>
+            <input
+              className="w-full bg-slate-800/50 p-4 rounded-xl border border-slate-700 focus:border-blue-500 outline-none mb-4"
+              placeholder="Enter new name"
+              value={renameLeaderboardName}
+              onChange={e => setRenameLeaderboardName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && confirmRenameLeaderboard()}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button onClick={() => {setRenamingLeaderboard(null); setRenameLeaderboardName('');}} className="flex-1 bg-slate-800 py-3 rounded-xl font-semibold hover:bg-slate-700">Cancel</button>
+              <button onClick={confirmRenameLeaderboard} className="flex-1 bg-blue-600 py-3 rounded-xl font-semibold hover:bg-blue-500">Rename</button>
             </div>
           </div>
         </div>
@@ -1513,7 +1564,7 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
         <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
       </div>
 
-      <TimerBar duration={20} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime} />
+      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>
@@ -1707,7 +1758,7 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
   return (
     <div className="min-h-screen flex flex-col p-4">
       <div className="mb-4">
-        <TimerBar duration={20} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={session?.questionStartTime} />
+        <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={session?.questionStartTime} />
       </div>
 
       {myStreak >= 2 && (
