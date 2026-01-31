@@ -68,5 +68,5 @@ pids/
 Thumbs.db
 
 # Quiz files - only commit encrypted versions
-quizzes/*.json
-!quizzes/*.enc.json
+quizzes/**/*.json
+!quizzes/**/*.enc.json

@@ -22,39 +22,41 @@ let accessToken = null;
 function getAccessToken() {
   if (accessToken) return accessToken;
 
+  // Try Firebase CLI config first (preferred for this project)
   try {
-    // Try to get token from gcloud first
+    const configPath = path.join(process.env.HOME || '', '.config', 'configstore', 'firebase-tools.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const tokens = config.tokens || config.user?.tokens;
+      if (tokens?.refresh_token) {
+        // Exchange refresh token for access token
+        const response = execSync(`curl -s -X POST "https://oauth2.googleapis.com/token" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com" \
+          -d "client_secret=j9iVZfS8kkCEFUPaAeJV0sAi" \
+          -d "refresh_token=${tokens.refresh_token}" \
+          -d "grant_type=refresh_token"`, { encoding: 'utf8' });
+        const tokenData = JSON.parse(response);
+        accessToken = tokenData.access_token;
+        return accessToken;
+      }
+    }
+  } catch (e) {
+    // Ignore and try gcloud
+  }
+
+  // Fall back to gcloud
+  try {
     accessToken = execSync('gcloud auth print-access-token 2>/dev/null', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe']
     }).trim();
     return accessToken;
   } catch {
-    // Fall back to firebase CLI config
-    try {
-      const configPath = path.join(process.env.HOME || '', '.config', 'configstore', 'firebase-tools.json');
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const tokens = config.tokens || config.user?.tokens;
-        if (tokens?.refresh_token) {
-          // Exchange refresh token for access token
-          const response = execSync(`curl -s -X POST "https://oauth2.googleapis.com/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com" \
-            -d "client_secret=j9iVZfS8kkCEFUPaAeJV0sAi" \
-            -d "refresh_token=${tokens.refresh_token}" \
-            -d "grant_type=refresh_token"`, { encoding: 'utf8' });
-          const tokenData = JSON.parse(response);
-          accessToken = tokenData.access_token;
-          return accessToken;
-        }
-      }
-    } catch (e) {
-      // Ignore
-    }
+    // Ignore
   }
 
-  throw new Error('Could not get access token. Run: gcloud auth login');
+  throw new Error('Could not get access token. Run: firebase login');
 }
 
 // Generate quiz ID from filename
