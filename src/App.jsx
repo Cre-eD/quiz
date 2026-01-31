@@ -1571,9 +1571,9 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
 
         <div className="grid grid-cols-2 gap-4 w-full max-w-4xl">
           {question?.options.map((opt, idx) => (
-            <div key={idx} className={`${optionColors[idx].bg} p-6 rounded-2xl flex items-center gap-4`}>
-              <i className={`fa ${optionColors[idx].icon} text-2xl opacity-75`}></i>
-              <span className="text-xl font-semibold">{opt}</span>
+            <div key={idx} className={`${optionColors[idx].bg} p-6 rounded-2xl flex flex-col items-center justify-center gap-3`}>
+              <i className={`fa ${optionColors[idx].icon} text-3xl opacity-75`}></i>
+              <span className="text-xl font-semibold text-center">{opt}</span>
             </div>
           ))}
         </div>
