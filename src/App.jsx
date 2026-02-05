@@ -472,6 +472,18 @@ export default function App() {
         return
       }
 
+      // Check for duplicate names (prevent multi-device cheating)
+      const existingPlayers = sessionData.players || {}
+      const normalizedName = joinForm.name.trim().toLowerCase()
+      const duplicateName = Object.entries(existingPlayers).find(
+        ([uid, name]) => uid !== user.uid && name.toLowerCase() === normalizedName
+      )
+      if (duplicateName) {
+        showToast("This name is already taken. Please choose a different name.", "error")
+        setLoading(false)
+        return
+      }
+
       await updateDoc(sRef, {
         [`players.${user.uid}`]: joinForm.name,
         [`scores.${user.uid}`]: sessionData.scores?.[user.uid] || 0
