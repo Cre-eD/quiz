@@ -809,11 +809,29 @@ function DashboardView(props) {
   const { user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
 
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [courseFilter, setCourseFilter] = useState('all')
   const [expandedLevels, setExpandedLevels] = useState({})
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Get unique courses
+  const courses = [...new Set(quizzes.map(q => q.course || 'default'))].sort()
+
+  // Course display names
+  const courseNames = {
+    'devops': 'DevOps',
+    'devops-intro': 'DevOps Intro',
+    'devops-intro-rus': 'DevOps Intro (RU)',
+    'devsecops-intro': 'DevSecOps Intro',
+    'default': 'Other'
+  }
+
+  // Filter by course first
+  const courseFilteredQuizzes = courseFilter === 'all'
+    ? quizzes
+    : quizzes.filter(q => (q.course || 'default') === courseFilter)
+
   // Group quizzes by level
-  const groupedQuizzes = quizzes.reduce((acc, quiz) => {
+  const groupedQuizzes = courseFilteredQuizzes.reduce((acc, quiz) => {
     const level = quiz.level || 0
     if (!acc[level]) acc[level] = []
     acc[level].push(quiz)
@@ -834,11 +852,6 @@ function DashboardView(props) {
       })
   }
 
-  // Count quizzes per category
-  const categoryCounts = quizzes.reduce((acc, q) => {
-    acc[q.category] = (acc[q.category] || 0) + 1
-    return acc
-  }, {})
 
   // Toggle level expansion
   const toggleLevel = (level) => {
@@ -895,6 +908,28 @@ function DashboardView(props) {
 
       {dashTab === 'quizzes' && (
         <>
+          {/* Course Filter */}
+          {courses.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-slate-500 text-sm mr-2"><i className="fa fa-book mr-1"></i>Course:</span>
+              <button
+                onClick={() => setCourseFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${courseFilter === 'all' ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+              >
+                All <span className="ml-1 text-xs opacity-70">{quizzes.length}</span>
+              </button>
+              {courses.map(course => (
+                <button
+                  key={course}
+                  onClick={() => setCourseFilter(course)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${courseFilter === course ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+                >
+                  {courseNames[course] || course} <span className="ml-1 text-xs opacity-70">{quizzes.filter(q => (q.course || 'default') === course).length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Search and Filter Bar */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-wrap items-center gap-2">
@@ -903,7 +938,7 @@ function DashboardView(props) {
                 onClick={() => setCategoryFilter('all')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${categoryFilter === 'all' ? 'bg-slate-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
               >
-                All <span className="ml-1 text-xs opacity-70">{quizzes.length}</span>
+                All <span className="ml-1 text-xs opacity-70">{courseFilteredQuizzes.length}</span>
               </button>
               {['pre', 'mid', 'post'].map(cat => (
                 <button
@@ -912,7 +947,7 @@ function DashboardView(props) {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${categoryFilter === cat ? `${categoryConfig[cat].bgClass} ${categoryConfig[cat].textClass}` : 'glass text-slate-400 hover:text-white'}`}
                 >
                   <i className={`fa fa-${categoryConfig[cat].icon} mr-1`}></i>
-                  {categoryConfig[cat].label} <span className="ml-1 text-xs opacity-70">{categoryCounts[cat] || 0}</span>
+                  {categoryConfig[cat].label} <span className="ml-1 text-xs opacity-70">{courseFilteredQuizzes.filter(q => q.category === cat).length}</span>
                 </button>
               ))}
             </div>

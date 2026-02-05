@@ -59,9 +59,26 @@ function getAccessToken() {
   throw new Error('Could not get access token. Run: firebase login');
 }
 
-// Generate quiz ID from filename
-function getQuizId(filename) {
-  return path.basename(filename, '.json').replace('_', '-');
+// Generate quiz ID from filepath (includes course prefix)
+function getQuizId(filepath) {
+  const relativePath = path.relative(QUIZZES_DIR, filepath);
+  const parts = relativePath.split(path.sep);
+
+  if (parts.length >= 2) {
+    // e.g., devops/lec1_pre.json → devops-lec1-pre
+    const course = parts[0];
+    const filename = path.basename(parts[parts.length - 1], '.json').replace('_', '-');
+    return `${course}-${filename}`;
+  }
+  // Fallback for files directly in quizzes/
+  return path.basename(filepath, '.json').replace('_', '-');
+}
+
+// Extract course name from filepath
+function getCourse(filepath) {
+  const relativePath = path.relative(QUIZZES_DIR, filepath);
+  const parts = relativePath.split(path.sep);
+  return parts.length >= 2 ? parts[0] : 'default';
 }
 
 // Convert JS object to Firestore document format
@@ -100,7 +117,8 @@ function validateQuiz(quiz) {
 // Upload a single quiz
 async function uploadQuiz(filepath) {
   const filename = path.basename(filepath);
-  const quizId = getQuizId(filename);
+  const quizId = getQuizId(filepath);
+  const course = getCourse(filepath);
 
   try {
     const content = fs.readFileSync(filepath, 'utf8');
@@ -116,6 +134,7 @@ async function uploadQuiz(filepath) {
     const quizData = {
       ...quiz,
       id: quizId,
+      course: course,
       updatedAt: new Date().toISOString(),
       questionCount: quiz.questions.length
     };
@@ -172,32 +191,38 @@ async function listQuizzes() {
       return;
     }
 
-    // Group by level
-    const byLevel = {};
+    // Group by course, then by level
+    const byCourse = {};
     docs.forEach(doc => {
       const fields = doc.fields || {};
+      const course = fields.course?.stringValue || 'default';
       const level = parseInt(fields.level?.integerValue || '0');
       const category = fields.category?.stringValue || 'unknown';
       const title = fields.title?.stringValue || 'Untitled';
       const qCount = fields.questionCount?.integerValue || fields.questions?.arrayValue?.values?.length || 0;
       const id = doc.name.split('/').pop();
 
-      if (!byLevel[level]) byLevel[level] = [];
-      byLevel[level].push({ id, title, category, qCount });
+      if (!byCourse[course]) byCourse[course] = {};
+      if (!byCourse[course][level]) byCourse[course][level] = [];
+      byCourse[course][level].push({ id, title, category, qCount });
     });
 
-    const levels = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
-    for (const level of levels) {
-      console.log(`  L${level}:`);
-      byLevel[level]
-        .sort((a, b) => ['pre', 'mid', 'post'].indexOf(a.category) - ['pre', 'mid', 'post'].indexOf(b.category))
-        .forEach(q => {
-          const icon = { pre: '🟢', mid: '🟡', post: '🔵' }[q.category] || '⚪';
-          console.log(`    ${icon} ${q.id} (${q.qCount}q)`);
-        });
+    const courses = Object.keys(byCourse).sort();
+    for (const course of courses) {
+      console.log(`\n  📚 ${course}:`);
+      const levels = Object.keys(byCourse[course]).map(Number).sort((a, b) => a - b);
+      for (const level of levels) {
+        console.log(`    L${level}:`);
+        byCourse[course][level]
+          .sort((a, b) => ['pre', 'mid', 'post'].indexOf(a.category) - ['pre', 'mid', 'post'].indexOf(b.category))
+          .forEach(q => {
+            const icon = { pre: '🟢', mid: '🟡', post: '🔵' }[q.category] || '⚪';
+            console.log(`      ${icon} ${q.id} (${q.qCount}q)`);
+          });
+      }
     }
 
-    console.log(`\n  Total: ${docs.length} quizzes`);
+    console.log(`\n  Total: ${docs.length} quizzes across ${courses.length} courses`);
 
   } catch (err) {
     console.error('Error:', err.message);
