@@ -199,12 +199,13 @@ async function listQuizzes() {
       const level = parseInt(fields.level?.integerValue || '0');
       const category = fields.category?.stringValue || 'unknown';
       const title = fields.title?.stringValue || 'Untitled';
+      const description = fields.description?.stringValue || null;
       const qCount = fields.questionCount?.integerValue || fields.questions?.arrayValue?.values?.length || 0;
       const id = doc.name.split('/').pop();
 
       if (!byCourse[course]) byCourse[course] = {};
       if (!byCourse[course][level]) byCourse[course][level] = [];
-      byCourse[course][level].push({ id, title, category, qCount });
+      byCourse[course][level].push({ id, title, category, qCount, description });
     });
 
     const courses = Object.keys(byCourse).sort();

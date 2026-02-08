@@ -34,6 +34,7 @@ Each course folder contains quiz files named `lec{N}_{type}.json` (or `.enc.json
   "title": "Git & GitHub - Pre-Quiz (Slides 1-12)",
   "level": 2,
   "category": "pre",
+  "description": "Slides 1-12: VCS basics, Git history, DVCS vs centralized, Working Tree/Staging/Repo model, commits/SHA, branches/HEAD",
   "questions": [
     {
       "text": "What does VCS stand for?",
@@ -58,6 +59,12 @@ Each course folder contains quiz files named `lec{N}_{type}.json` (or `.enc.json
 | `level` | number | Lecture number (1, 2, 3...) |
 | `category` | string | `"pre"`, `"mid"`, or `"post"` |
 | `questions` | array | Array of question objects |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | string | Slides covered and topics (e.g., "Slides 1-10: Threat modeling basics, STRIDE intro") |
 
 ### Question Object
 
