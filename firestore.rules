@@ -1,9 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Server-side admin check using custom claims (cannot be bypassed by client)
+    // Admin check - TEMPORARY: Using email until custom claims are available
+    // TODO: Switch to custom claims when organization policy allows service account key creation
+    // Note: Email-based check is less secure but works immediately without service account access
     function isAdmin() {
-      return request.auth != null && request.auth.token.admin == true;
+      return request.auth != null &&
+             request.auth.token.email == "creeed22@gmail.com";
     }
 
     // Validate string length
