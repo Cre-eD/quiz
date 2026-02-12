@@ -18,7 +18,7 @@
     "test:e2e:report": "npx playwright show-report",
     "test:all": "vitest run && npx playwright test",
     "deploy": "npm run build && firebase deploy",
-    "deploy:prod": "mv .env.local .env.local.bak 2>/dev/null || true && npm run build && firebase deploy && mv .env.local.bak .env.local 2>/dev/null || true",
+    "deploy:prod": "bash scripts/deploy-prod.sh",
     "upload-quiz": "node scripts/upload-quiz.js",
     "upload-all": "node scripts/upload-quiz.js --all",
     "list-quizzes": "node scripts/upload-quiz.js --list"
