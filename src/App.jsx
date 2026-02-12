@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { doc, setDoc, getDoc, updateDoc, onSnapshot, collection, deleteDoc } from 'firebase/firestore'
-import { db } from './lib/firebase/config'
 import { authService } from './features/auth/services/authService'
+import { sessionService } from './features/session/services/sessionService'
+import { quizService } from './features/quiz/services/quizService'
+import { gameService } from './features/game/services/gameService'
+import { leaderboardService } from './features/leaderboard/services/leaderboardService'
 import { optionColors } from './constants'
 import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
@@ -154,18 +156,20 @@ export default function App() {
   // Load quizzes
   useEffect(() => {
     if (view === 'dash' && user) {
-      return onSnapshot(collection(db, 'quizzes'), (snapshot) => {
-        setQuizzes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
-      })
+      return quizService.subscribeToQuizzes(
+        (quizzes) => setQuizzes(quizzes),
+        (error) => showToast("Failed to load quizzes", "error")
+      )
     }
   }, [view, user])
 
   // Load leaderboards
   useEffect(() => {
     if (view === 'dash' && user && isAdmin) {
-      return onSnapshot(collection(db, 'leaderboards'), (snapshot) => {
-        setLeaderboards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
-      })
+      return leaderboardService.subscribeToLeaderboards(
+        (leaderboards) => setLeaderboards(leaderboards),
+        (error) => showToast("Failed to load leaderboards", "error")
+      )
     }
   }, [view, user, isAdmin])
 
@@ -175,16 +179,13 @@ export default function App() {
       showToast("Please enter a leaderboard name", "error")
       return
     }
-    try {
-      const id = Math.random().toString(36).substring(2, 11)
-      await setDoc(doc(db, 'leaderboards', id), {
-        id, name: newLeaderboardName.trim(), createdAt: Date.now(), players: {}
-      })
+    const result = await leaderboardService.createLeaderboard(newLeaderboardName)
+    if (result.success) {
       setNewLeaderboardName('')
       setShowLeaderboardModal(false)
       showToast("Leaderboard created!")
-    } catch (e) {
-      showToast("Failed to create leaderboard", "error")
+    } else {
+      showToast(result.error || "Failed to create leaderboard", "error")
     }
   }
 
@@ -194,12 +195,12 @@ export default function App() {
       title: "Flush Leaderboard",
       message: `Are you sure you want to reset "${lb.name}"? All scores will be deleted.`,
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'leaderboards', lb.id), { players: {} })
+        const result = await leaderboardService.flushLeaderboard(lb.id)
+        if (result.success) {
           showToast("Leaderboard reset!")
           setViewingLeaderboard(null)
-        } catch (e) {
-          showToast("Failed to reset leaderboard", "error")
+        } else {
+          showToast(result.error || "Failed to reset leaderboard", "error")
         }
         setConfirmModal({ isOpen: false })
       },
@@ -213,12 +214,12 @@ export default function App() {
       title: "Delete Leaderboard",
       message: `Are you sure you want to delete "${lb.name}"? This cannot be undone.`,
       onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, 'leaderboards', lb.id))
+        const result = await leaderboardService.deleteLeaderboard(lb.id)
+        if (result.success) {
           showToast("Leaderboard deleted!")
           setViewingLeaderboard(null)
-        } catch (e) {
-          showToast("Failed to delete leaderboard", "error")
+        } else {
+          showToast(result.error || "Failed to delete leaderboard", "error")
         }
         setConfirmModal({ isOpen: false })
       },
@@ -236,53 +237,37 @@ export default function App() {
       showToast("Please enter a leaderboard name", "error")
       return
     }
-    try {
-      await updateDoc(doc(db, 'leaderboards', renamingLeaderboard.id), {
-        name: renameLeaderboardName.trim()
-      })
+    const result = await leaderboardService.renameLeaderboard({
+      leaderboardId: renamingLeaderboard.id,
+      newName: renameLeaderboardName
+    })
+    if (result.success) {
       showToast("Leaderboard renamed!")
       setRenamingLeaderboard(null)
       setRenameLeaderboardName('')
-    } catch (e) {
-      showToast("Failed to rename leaderboard", "error")
+    } else {
+      showToast(result.error || "Failed to rename leaderboard", "error")
     }
   }
 
   const saveToLeaderboard = async (leaderboardId, sessionPlayers, sessionScores) => {
     if (!leaderboardId) return
-    try {
-      const lbRef = doc(db, 'leaderboards', leaderboardId)
-      const lbSnap = await getDoc(lbRef)
-      if (!lbSnap.exists()) return
-
-      const existingPlayers = lbSnap.data().players || {}
-      Object.entries(sessionPlayers).forEach(([uid, displayName]) => {
-        const nameKey = displayName.toLowerCase().trim()
-        const sessionScore = sessionScores[uid] || 0
-
-        if (existingPlayers[nameKey]) {
-          existingPlayers[nameKey].totalScore += sessionScore
-          existingPlayers[nameKey].quizzesTaken += 1
-          existingPlayers[nameKey].lastPlayed = Date.now()
-          existingPlayers[nameKey].displayName = displayName
-        } else {
-          existingPlayers[nameKey] = {
-            displayName, totalScore: sessionScore, quizzesTaken: 1, lastPlayed: Date.now()
-          }
-        }
-      })
-      await updateDoc(lbRef, { players: existingPlayers })
-    } catch (e) {
-      console.error('Failed to save to leaderboard:', e)
+    const result = await leaderboardService.saveScoresToLeaderboard({
+      leaderboardId,
+      sessionPlayers,
+      sessionScores
+    })
+    if (!result.success) {
+      console.error('Failed to save to leaderboard:', result.error)
     }
   }
 
   // Session listeners
   useEffect(() => {
     if ((view === 'host' || view === 'play-host') && session?.pin) {
-      return onSnapshot(doc(db, 'sessions', session.pin), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data()
+      return sessionService.subscribeToSession(
+        session.pin,
+        (data) => {
           setSession(data)
           setGamePhase(data.status || 'lobby')
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
@@ -291,17 +276,17 @@ export default function App() {
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.reactions) setReactions(data.reactions)
           if (data.badges) setBadges(data.badges)
-        }
-      })
+        },
+        (error) => showToast("Session connection lost", "error")
+      )
     }
   }, [view, session?.pin])
 
   useEffect(() => {
     if ((view === 'wait' || view === 'play-player') && session?.pin) {
-      return onSnapshot(doc(db, 'sessions', session.pin), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data()
-
+      return sessionService.subscribeToSession(
+        session.pin,
+        (data) => {
           // Check if player was kicked
           if (data.bannedUsers?.includes(user?.uid)) {
             localStorage.removeItem('quizSession')
@@ -343,22 +328,22 @@ export default function App() {
           if (data.streaks) setStreaks(data.streaks)
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.badges) setBadges(data.badges)
-        }
-      })
+        },
+        (error) => showToast("Session connection lost", "error")
+      )
     }
   }, [view, session?.pin, user?.uid])
 
   const handleImport = () => {
-    try {
-      const data = JSON.parse(importText)
-      if (!data.title || !Array.isArray(data.questions)) throw new Error("Invalid format")
-      setActiveQuiz(data)
+    const result = quizService.importQuizFromJSON(importText)
+    if (result.success) {
+      setActiveQuiz(result.quiz)
       setShowImport(false)
       setImportText('')
       setView('edit')
       showToast("Quiz imported successfully!")
-    } catch (e) {
-      showToast("Invalid JSON format", "error")
+    } else {
+      showToast(result.error || "Invalid JSON format", "error")
     }
   }
 
@@ -368,16 +353,14 @@ export default function App() {
       return
     }
     setSaving(true)
-    try {
-      const id = activeQuiz.id || Math.random().toString(36).substring(2, 11)
-      await setDoc(doc(db, 'quizzes', id), { ...activeQuiz, id, owner: user.uid })
+    const result = await quizService.saveQuiz({ quiz: activeQuiz, userId: user.uid })
+    if (result.success) {
       showToast("Quiz saved successfully!")
       setView('dash')
-    } catch (e) {
-      showToast("Failed to save quiz", "error")
-    } finally {
-      setSaving(false)
+    } else {
+      showToast(result.error || "Failed to save quiz", "error")
     }
+    setSaving(false)
   }
 
   const handleDelete = async (quiz) => {
@@ -386,11 +369,11 @@ export default function App() {
       title: "Delete Quiz",
       message: `Are you sure you want to delete "${quiz.title}"?`,
       onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, 'quizzes', quiz.id))
+        const result = await quizService.deleteQuiz(quiz.id)
+        if (result.success) {
           showToast("Quiz deleted")
-        } catch (e) {
-          showToast("Failed to delete quiz", "error")
+        } else {
+          showToast(result.error || "Failed to delete quiz", "error")
         }
         setConfirmModal({ isOpen: false })
       },
@@ -405,44 +388,43 @@ export default function App() {
 
   const confirmLaunch = async () => {
     if (!launchingQuiz) return
-    const pin = Math.floor(1000 + Math.random() * 9000).toString()
-    const data = {
-      pin, quiz: launchingQuiz, status: 'lobby', players: {}, scores: {}, streaks: {}, coldStreaks: {},
-      currentQuestion: 0, answers: {}, allowLateJoin: true,
+    const leaderboardName = selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null
+    const result = await sessionService.createSession({
+      quiz: launchingQuiz,
       leaderboardId: selectedLeaderboard || null,
-      leaderboardName: selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null,
-      reactions: [], badges: {}, correctCounts: {}, bannedUsers: []
+      leaderboardName
+    })
+    if (result.success) {
+      setSession(result.session)
+      setScores({})
+      setStreaks({})
+      setColdStreaks({})
+      setReactions([])
+      setBadges({})
+      setCurrentQuestion(0)
+      setGamePhase('lobby')
+      setLaunchingQuiz(null)
+      setView('host')
+    } else {
+      showToast(result.error || "Failed to create session", "error")
     }
-    await setDoc(doc(db, 'sessions', pin), data)
-    setSession(data)
-    setScores({})
-    setStreaks({})
-    setColdStreaks({})
-    setReactions([])
-    setBadges({})
-    setCurrentQuestion(0)
-    setGamePhase('lobby')
-    setLaunchingQuiz(null)
-    setView('host')
   }
 
   const toggleLateJoin = async () => {
-    await updateDoc(doc(db, 'sessions', session.pin), { allowLateJoin: !session.allowLateJoin })
+    const result = await sessionService.toggleLateJoin(session.pin, !session.allowLateJoin)
+    if (!result.success) {
+      showToast(result.error || "Failed to toggle late join", "error")
+    }
   }
 
   const kickPlayer = async (uid) => {
     if (!session?.pin) return
-    const currentBanned = session.bannedUsers || []
-    const updates = {
-      bannedUsers: [...currentBanned, uid]
+    const result = await sessionService.kickPlayer(session.pin, uid, session.bannedUsers)
+    if (result.success) {
+      showToast("Player kicked")
+    } else {
+      showToast(result.error || "Failed to kick player", "error")
     }
-    // Remove player from players, scores, streaks
-    updates[`players.${uid}`] = null
-    updates[`scores.${uid}`] = null
-    updates[`streaks.${uid}`] = null
-    updates[`coldStreaks.${uid}`] = null
-    await updateDoc(doc(db, 'sessions', session.pin), updates)
-    showToast("Player kicked")
   }
 
   const handleJoin = async () => {
@@ -451,92 +433,52 @@ export default function App() {
       return
     }
     setLoading(true)
-    try {
-      const sRef = doc(db, 'sessions', joinForm.pin)
-      const snap = await getDoc(sRef)
-      if (!snap.exists()) {
-        showToast("PIN not found!", "error")
-        setLoading(false)
-        return
-      }
-      const sessionData = snap.data()
+    const result = await sessionService.joinSession({
+      pin: joinForm.pin,
+      userId: user.uid,
+      displayName: joinForm.name
+    })
 
-      if (sessionData.status !== 'lobby' && !sessionData.allowLateJoin) {
-        showToast("Game already in progress. Late joining is disabled.", "error")
-        setLoading(false)
-        return
-      }
+    if (result.success) {
+      setSession(result.session)
+      setScores(result.session.scores || {})
 
-      // Check if user is banned
-      if (sessionData.bannedUsers?.includes(user.uid)) {
-        showToast("You have been removed from this game.", "error")
-        setLoading(false)
-        return
-      }
-
-      // Check for duplicate names (prevent multi-device cheating)
-      const existingPlayers = sessionData.players || {}
-      const normalizedName = joinForm.name.trim().toLowerCase()
-      const duplicateName = Object.entries(existingPlayers).find(
-        ([uid, name]) => uid !== user.uid && name.toLowerCase() === normalizedName
-      )
-      if (duplicateName) {
-        showToast("This name is already taken. Please choose a different name.", "error")
-        setLoading(false)
-        return
-      }
-
-      await updateDoc(sRef, {
-        [`players.${user.uid}`]: joinForm.name,
-        [`scores.${user.uid}`]: sessionData.scores?.[user.uid] || 0
-      })
-      localStorage.setItem('quizSession', JSON.stringify({ pin: joinForm.pin, name: joinForm.name }))
-      setSession(sessionData)
-      setScores(sessionData.scores || {})
-
-      if (sessionData.status !== 'lobby') {
+      if (result.session.status !== 'lobby') {
         setView('play-player')
-        prevGamePhaseRef.current = sessionData.status
-        setGamePhase(sessionData.status)
-        setCurrentQuestion(sessionData.currentQuestion || 0)
+        prevGamePhaseRef.current = result.session.status
+        setGamePhase(result.session.status)
+        setCurrentQuestion(result.session.currentQuestion || 0)
         showToast("Joined! Catching up...", "info")
       } else {
         setView('wait')
       }
-    } catch (e) {
-      showToast("Failed to join session", "error")
-    } finally {
-      setLoading(false)
+    } else {
+      showToast(result.error || "Failed to join session", "error")
     }
+    setLoading(false)
   }
 
   const tryRecoverSession = async () => {
-    const saved = localStorage.getItem('quizSession')
-    if (!saved || !user) return
+    if (!user) return
+    const result = await sessionService.recoverSession(user.uid)
 
-    try {
-      const { pin, name } = JSON.parse(saved)
-      const snap = await getDoc(doc(db, 'sessions', pin))
+    if (result.success) {
+      setSession(result.session)
+      setScores(result.session.scores || {})
+      setJoinForm({ pin: result.pin, name: result.name })
 
-      if (snap.exists()) {
-        const data = snap.data()
-        if (data.players && data.players[user.uid]) {
-          setSession(data)
-          setScores(data.scores || {})
-          setJoinForm({ pin, name })
-
-          if (data.status === 'lobby') setView('wait')
-          else if (data.status === 'final') { setView('play-player'); prevGamePhaseRef.current = 'final'; setGamePhase('final') }
-          else { setView('play-player'); prevGamePhaseRef.current = data.status; setGamePhase(data.status) }
-          showToast("Session restored!", "info")
-        } else {
-          localStorage.removeItem('quizSession')
-        }
+      if (result.session.status === 'lobby') {
+        setView('wait')
+      } else if (result.session.status === 'final') {
+        setView('play-player')
+        prevGamePhaseRef.current = 'final'
+        setGamePhase('final')
       } else {
-        localStorage.removeItem('quizSession')
+        setView('play-player')
+        prevGamePhaseRef.current = result.session.status
+        setGamePhase(result.session.status)
       }
-    } catch (e) {
-      localStorage.removeItem('quizSession')
+      showToast("Session restored!", "info")
     }
   }
 
@@ -545,82 +487,44 @@ export default function App() {
   }, [user, isAdmin])
 
   const startGame = async () => {
-    // Start with countdown phase
-    await updateDoc(doc(db, 'sessions', session.pin), {
-      status: 'countdown',
-      currentQuestion: 0,
-      answers: {},
-      countdownEnd: Date.now() + 3000,  // 3-second countdown
-      questionStartTime: null,  // Clear old timer
-      reactions: []
-    })
-    setView('play-host')
-
-    // Auto-transition to question phase after countdown
-    setTimeout(async () => {
-      const sessionRef = doc(db, 'sessions', session.pin)
-      const sessionSnap = await getDoc(sessionRef)
-      // Only transition if still in countdown (not manually advanced)
-      if (sessionSnap.exists() && sessionSnap.data().status === 'countdown') {
-        await updateDoc(sessionRef, {
-          status: 'question',
-          questionStartTime: Date.now()
-        })
-      }
-    }, 3000)
-  }
-
-  const showQuestionResults = async () => {
-    await updateDoc(doc(db, 'sessions', session.pin), { status: 'results' })
-  }
-
-  const nextQuestion = async () => {
-    const nextQ = currentQuestion + 1
-
-    // Break streaks for players who didn't answer
-    const newStreaks = { ...session.streaks }
-    const newColdStreaks = { ...session.coldStreaks }
-    const answeredPlayers = new Set(Object.keys(session.answers || {}))
-
-    Object.keys(session.players || {}).forEach(uid => {
-      if (!answeredPlayers.has(uid)) {
-        newStreaks[uid] = 0  // Reset streak for non-answerers
-        newColdStreaks[uid] = (newColdStreaks[uid] || 0) + 1  // Increment cold streak
-      }
-    })
-
-    if (nextQ >= session.quiz.questions.length) {
-      await updateDoc(doc(db, 'sessions', session.pin), {
-        status: 'final',
-        reactions: [],
-        streaks: newStreaks,
-        coldStreaks: newColdStreaks
-      })
-    } else {
-      // Start with countdown phase
-      await updateDoc(doc(db, 'sessions', session.pin), {
-        status: 'countdown',
-        currentQuestion: nextQ,
-        answers: {},
-        countdownEnd: Date.now() + 3000,  // 3-second countdown
-        questionStartTime: null,  // Clear old timer
-        reactions: [],
-        streaks: newStreaks,
-        coldStreaks: newColdStreaks
-      })
+    const result = await gameService.startGame(session.pin)
+    if (result.success) {
+      setView('play-host')
 
       // Auto-transition to question phase after countdown
       setTimeout(async () => {
-        const sessionRef = doc(db, 'sessions', session.pin)
-        const sessionSnap = await getDoc(sessionRef)
-        // Only transition if still in countdown (not manually advanced)
-        if (sessionSnap.exists() && sessionSnap.data().status === 'countdown') {
-          await updateDoc(sessionRef, {
-            status: 'question',
-            questionStartTime: Date.now()
-          })
-        }
+        await gameService.startQuestionTimer(session.pin)
       }, 3000)
+    } else {
+      showToast(result.error || "Failed to start game", "error")
+    }
+  }
+
+  const showQuestionResults = async () => {
+    const result = await gameService.showQuestionResults(session.pin)
+    if (!result.success) {
+      showToast(result.error || "Failed to show results", "error")
+    }
+  }
+
+  const nextQuestion = async () => {
+    const result = await gameService.nextQuestion({
+      pin: session.pin,
+      currentQuestion,
+      totalQuestions: session.quiz.questions.length,
+      streaks: session.streaks,
+      coldStreaks: session.coldStreaks,
+      answers: session.answers,
+      players: session.players
+    })
+
+    if (result.success && !result.isFinal) {
+      // Auto-transition to question phase after countdown
+      setTimeout(async () => {
+        await gameService.startQuestionTimer(session.pin)
+      }, 3000)
+    } else if (!result.success) {
+      showToast(result.error || "Failed to move to next question", "error")
     }
   }
 
@@ -629,10 +533,14 @@ export default function App() {
       await saveToLeaderboard(session.leaderboardId, session.players, session.scores)
       showToast(`Scores saved to ${session.leaderboardName}!`)
     }
-    await deleteDoc(doc(db, 'sessions', session.pin))
-    setSession(null)
-    setView('dash')
-    showToast("Session ended")
+    const result = await sessionService.deleteSession(session.pin)
+    if (result.success) {
+      setSession(null)
+      setView('dash')
+      showToast("Session ended")
+    } else {
+      showToast(result.error || "Failed to end session", "error")
+    }
   }
 
   const getStreakMultiplier = (streak) => {
@@ -649,16 +557,17 @@ export default function App() {
 
     setMyReactionCount(prev => prev + 1)
     const playerName = session.players?.[user.uid] || 'Player'
-    const reaction = {
-      id: Date.now() + Math.random(),
+    const result = await gameService.sendReaction({
+      pin: session.pin,
       emoji,
       playerName,
-      timestamp: Date.now()
+      currentReactions: session.reactions
+    })
+
+    if (!result.success) {
+      showToast(result.error || "Failed to send reaction", "error")
+      setMyReactionCount(prev => prev - 1) // Revert on error
     }
-    // Add reaction to array (keep last 15 for display)
-    const currentReactions = session.reactions || []
-    const newReactions = [...currentReactions, reaction].slice(-15)
-    await updateDoc(doc(db, 'sessions', session.pin), { reactions: newReactions })
   }
 
   const submitAnswer = async (answerIndex, answerTime = null) => {
@@ -758,18 +667,26 @@ export default function App() {
       newBadges.perfectGame = true
     }
 
-    await updateDoc(doc(db, 'sessions', session.pin), {
-      [`answers.${user.uid}`]: { answerIndex, answerTime, timestamp: now },
-      [`scores.${user.uid}`]: currentScore + points,
-      [`streaks.${user.uid}`]: newStreak,
-      [`coldStreaks.${user.uid}`]: newColdStreak,
-      [`correctCounts.${user.uid}`]: newCorrectCount,
-      [`badges.${user.uid}`]: newBadges
+    const result = await gameService.submitAnswer({
+      pin: session.pin,
+      userId: user.uid,
+      updates: {
+        [`answers.${user.uid}`]: { answerIndex, answerTime, timestamp: now },
+        [`scores.${user.uid}`]: currentScore + points,
+        [`streaks.${user.uid}`]: newStreak,
+        [`coldStreaks.${user.uid}`]: newColdStreak,
+        [`correctCounts.${user.uid}`]: newCorrectCount,
+        [`badges.${user.uid}`]: newBadges
+      }
     })
 
-    // Show comeback message
-    if (comebackMessage) {
-      showToast(comebackMessage, "success")
+    if (result.success) {
+      // Show comeback message
+      if (comebackMessage) {
+        showToast(comebackMessage, "success")
+      }
+    } else {
+      showToast(result.error || "Failed to submit answer", "error")
     }
   }
 
