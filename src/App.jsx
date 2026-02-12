@@ -554,6 +554,7 @@ export default function App() {
       currentQuestion: 0,
       answers: {},
       countdownEnd: Date.now() + 3000,  // 3-second countdown
+      questionStartTime: null,  // Clear old timer
       reactions: []
     })
     setView('play-host')
@@ -605,6 +606,7 @@ export default function App() {
         currentQuestion: nextQ,
         answers: {},
         countdownEnd: Date.now() + 3000,  // 3-second countdown
+        questionStartTime: null,  // Clear old timer
         reactions: [],
         streaks: newStreaks,
         coldStreaks: newColdStreaks
