@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { authService } from './features/auth/services/authService'
 import { sessionService } from './features/session/services/sessionService'
-import { quizService } from './features/quiz/services/quizService'
 import { gameService } from './features/game/services/gameService'
-import { leaderboardService } from './features/leaderboard/services/leaderboardService'
+import { useAuth } from './features/auth/hooks/useAuth'
+import { useQuizzes } from './features/quiz/hooks/useQuizzes'
+import { useLeaderboards } from './features/leaderboard/hooks/useLeaderboards'
 import { optionColors } from './constants'
 import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
@@ -35,29 +35,78 @@ const pageTransition = {
 
 export default function App() {
   const [view, setView] = useState('home')
-  const [user, setUser] = useState(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [quizzes, setQuizzes] = useState([])
-  const [activeQuiz, setActiveQuiz] = useState({ title: '', questions: [] })
   const [session, setSession] = useState(null)
   const [joinForm, setJoinForm] = useState({ pin: '', name: '' })
-  const [importText, setImportText] = useState('')
-  const [showImport, setShowImport] = useState(false)
   const [toast, setToast] = useState(null)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false })
-  const [saving, setSaving] = useState(false)
-
-  // Leaderboard state
-  const [leaderboards, setLeaderboards] = useState([])
-  const [selectedLeaderboard, setSelectedLeaderboard] = useState(null)
-  const [dashTab, setDashTab] = useState('quizzes')
-  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
-  const [newLeaderboardName, setNewLeaderboardName] = useState('')
-  const [renamingLeaderboard, setRenamingLeaderboard] = useState(null)
-  const [renameLeaderboardName, setRenameLeaderboardName] = useState('')
-  const [viewingLeaderboard, setViewingLeaderboard] = useState(null)
   const [launchingQuiz, setLaunchingQuiz] = useState(null)
+  const [joiningSession, setJoiningSession] = useState(false)
+
+  const showToast = (message, type = "success") => setToast({ message, type })
+  const showConfirm = (config) => setConfirmModal({ isOpen: true, ...config })
+
+  // Custom hooks
+  const { user, isAdmin, loading, handleSignInWithGoogle: signIn, signOutAdmin: signOut } = useAuth()
+
+  // Wrap auth handlers with view navigation
+  const handleSignInWithGoogle = () => signIn(
+    () => { setView('dash'); showToast("Welcome back, Admin!") },
+    (error) => showToast(error, "error")
+  )
+
+  const signOutAdmin = () => signOut(
+    () => { setView('home'); showToast("Signed out successfully") }
+  )
+
+  const {
+    quizzes,
+    activeQuiz,
+    setActiveQuiz,
+    importText,
+    setImportText,
+    showImport,
+    setShowImport,
+    saving,
+    handleImport,
+    handleSave,
+    handleDelete
+  } = useQuizzes({
+    user,
+    isActive: view === 'dash',
+    onToast: showToast,
+    onConfirm: showConfirm
+  })
+
+  const {
+    leaderboards,
+    selectedLeaderboard,
+    setSelectedLeaderboard,
+    dashTab,
+    setDashTab,
+    showLeaderboardModal,
+    setShowLeaderboardModal,
+    newLeaderboardName,
+    setNewLeaderboardName,
+    renamingLeaderboard,
+    setRenamingLeaderboard,
+    renameLeaderboardName,
+    setRenameLeaderboardName,
+    viewingLeaderboard,
+    setViewingLeaderboard,
+    createLeaderboard,
+    flushLeaderboard,
+    deleteLeaderboard,
+    renameLeaderboard,
+    confirmRenameLeaderboard,
+    saveToLeaderboard,
+    getLeaderboardPlayers
+  } = useLeaderboards({
+    user,
+    isAdmin,
+    isActive: view === 'dash',
+    onToast: showToast,
+    onConfirm: showConfirm
+  })
 
   // Game state
   const [currentQuestion, setCurrentQuestion] = useState(0)
@@ -88,186 +137,7 @@ export default function App() {
     perfectGame: { icon: '👑', name: 'Perfect Game', desc: 'All answers correct' }
   }
 
-  const showToast = (message, type = "success") => setToast({ message, type })
 
-  const handleSignInWithGoogle = async () => {
-    setLoading(true)
-    const result = await authService.handleSignInWithGoogle()
-
-    if (result.requiresRedirect) {
-      // Redirect in progress, don't update loading state
-      return
-    }
-
-    if (!result.success) {
-      showToast("Sign-in failed: " + result.error, "error")
-      setLoading(false)
-      return
-    }
-
-    // Validate admin access
-    const validation = await authService.validateAdminAccess(result.user)
-    if (validation.isAdmin) {
-      setIsAdmin(true)
-      setView('dash')
-      showToast("Welcome back, Admin!")
-    } else {
-      showToast(validation.error, "error")
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    const handleRedirect = async () => {
-      const result = await authService.handleRedirectResult()
-
-      if (result.error) {
-        showToast("Sign-in failed. Please try again.", "error")
-        return
-      }
-
-      if (result.hasResult && result.user) {
-        const validation = await authService.validateAdminAccess(result.user)
-        if (validation.isAdmin) {
-          setIsAdmin(true)
-          setView('dash')
-          showToast("Welcome back, Admin!")
-        } else {
-          showToast(validation.error, "error")
-        }
-        setLoading(false)
-      }
-    }
-    handleRedirect()
-  }, [])
-
-  const signOutAdmin = async () => {
-    const result = await authService.signOut()
-    if (result.success) {
-      setIsAdmin(false)
-      setView('home')
-      showToast("Signed out successfully")
-    } else {
-      showToast("Sign-out failed", "error")
-    }
-  }
-
-  useEffect(() => {
-    return authService.onAuthStateChanged((user, isAdminStatus) => {
-      setUser(user)
-      setIsAdmin(isAdminStatus)
-      setLoading(false)
-    })
-  }, [])
-
-  // Load quizzes
-  useEffect(() => {
-    if (view === 'dash' && user) {
-      return quizService.subscribeToQuizzes(
-        (quizzes) => setQuizzes(quizzes),
-        (error) => showToast("Failed to load quizzes", "error")
-      )
-    }
-  }, [view, user])
-
-  // Load leaderboards
-  useEffect(() => {
-    if (view === 'dash' && user && isAdmin) {
-      return leaderboardService.subscribeToLeaderboards(
-        (leaderboards) => setLeaderboards(leaderboards),
-        (error) => showToast("Failed to load leaderboards", "error")
-      )
-    }
-  }, [view, user, isAdmin])
-
-  // Leaderboard functions
-  const createLeaderboard = async () => {
-    if (!newLeaderboardName.trim()) {
-      showToast("Please enter a leaderboard name", "error")
-      return
-    }
-    const result = await leaderboardService.createLeaderboard(newLeaderboardName)
-    if (result.success) {
-      setNewLeaderboardName('')
-      setShowLeaderboardModal(false)
-      showToast("Leaderboard created!")
-    } else {
-      showToast(result.error || "Failed to create leaderboard", "error")
-    }
-  }
-
-  const flushLeaderboard = async (lb) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Flush Leaderboard",
-      message: `Are you sure you want to reset "${lb.name}"? All scores will be deleted.`,
-      onConfirm: async () => {
-        const result = await leaderboardService.flushLeaderboard(lb.id)
-        if (result.success) {
-          showToast("Leaderboard reset!")
-          setViewingLeaderboard(null)
-        } else {
-          showToast(result.error || "Failed to reset leaderboard", "error")
-        }
-        setConfirmModal({ isOpen: false })
-      },
-      onCancel: () => setConfirmModal({ isOpen: false })
-    })
-  }
-
-  const deleteLeaderboard = async (lb) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Delete Leaderboard",
-      message: `Are you sure you want to delete "${lb.name}"? This cannot be undone.`,
-      onConfirm: async () => {
-        const result = await leaderboardService.deleteLeaderboard(lb.id)
-        if (result.success) {
-          showToast("Leaderboard deleted!")
-          setViewingLeaderboard(null)
-        } else {
-          showToast(result.error || "Failed to delete leaderboard", "error")
-        }
-        setConfirmModal({ isOpen: false })
-      },
-      onCancel: () => setConfirmModal({ isOpen: false })
-    })
-  }
-
-  const renameLeaderboard = async (lb) => {
-    setRenamingLeaderboard(lb)
-    setRenameLeaderboardName(lb.name)
-  }
-
-  const confirmRenameLeaderboard = async () => {
-    if (!renameLeaderboardName.trim()) {
-      showToast("Please enter a leaderboard name", "error")
-      return
-    }
-    const result = await leaderboardService.renameLeaderboard({
-      leaderboardId: renamingLeaderboard.id,
-      newName: renameLeaderboardName
-    })
-    if (result.success) {
-      showToast("Leaderboard renamed!")
-      setRenamingLeaderboard(null)
-      setRenameLeaderboardName('')
-    } else {
-      showToast(result.error || "Failed to rename leaderboard", "error")
-    }
-  }
-
-  const saveToLeaderboard = async (leaderboardId, sessionPlayers, sessionScores) => {
-    if (!leaderboardId) return
-    const result = await leaderboardService.saveScoresToLeaderboard({
-      leaderboardId,
-      sessionPlayers,
-      sessionScores
-    })
-    if (!result.success) {
-      console.error('Failed to save to leaderboard:', result.error)
-    }
-  }
 
   // Session listeners
   useEffect(() => {
@@ -341,52 +211,6 @@ export default function App() {
     }
   }, [view, session?.pin, user?.uid])
 
-  const handleImport = () => {
-    const result = quizService.importQuizFromJSON(importText)
-    if (result.success) {
-      setActiveQuiz(result.quiz)
-      setShowImport(false)
-      setImportText('')
-      setView('edit')
-      showToast("Quiz imported successfully!")
-    } else {
-      showToast(result.error || "Invalid JSON format", "error")
-    }
-  }
-
-  const handleSave = async () => {
-    if (!activeQuiz.title.trim()) {
-      showToast("Please enter a quiz title", "error")
-      return
-    }
-    setSaving(true)
-    const result = await quizService.saveQuiz({ quiz: activeQuiz, userId: user.uid })
-    if (result.success) {
-      showToast("Quiz saved successfully!")
-      setView('dash')
-    } else {
-      showToast(result.error || "Failed to save quiz", "error")
-    }
-    setSaving(false)
-  }
-
-  const handleDelete = async (quiz) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Delete Quiz",
-      message: `Are you sure you want to delete "${quiz.title}"?`,
-      onConfirm: async () => {
-        const result = await quizService.deleteQuiz(quiz.id)
-        if (result.success) {
-          showToast("Quiz deleted")
-        } else {
-          showToast(result.error || "Failed to delete quiz", "error")
-        }
-        setConfirmModal({ isOpen: false })
-      },
-      onCancel: () => setConfirmModal({ isOpen: false })
-    })
-  }
 
   const handleLaunch = (quiz) => {
     setLaunchingQuiz(quiz)
@@ -439,7 +263,7 @@ export default function App() {
       showToast("Please enter PIN and name", "error")
       return
     }
-    setLoading(true)
+    setJoiningSession(true)
     const result = await sessionService.joinSession({
       pin: joinForm.pin,
       userId: user.uid,
@@ -462,7 +286,7 @@ export default function App() {
     } else {
       showToast(result.error || "Failed to join session", "error")
     }
-    setLoading(false)
+    setJoiningSession(false)
   }
 
   const tryRecoverSession = async () => {
@@ -705,13 +529,6 @@ export default function App() {
       return a.name.localeCompare(b.name)
     })
 
-  const getLeaderboardPlayers = (lb) => {
-    if (!lb?.players) return []
-    return Object.entries(lb.players)
-      .map(([key, data]) => ({ key, ...data }))
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .slice(0, 20)
-  }
 
   // Render
   if (loading && view === 'home') {
@@ -723,7 +540,7 @@ export default function App() {
       <AnimatePresence mode="wait">
         {view === 'home' && (
           <motion.div key="home" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HomePage {...{ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, handleSignInWithGoogle }} />
+            <HomePage {...{ joinForm, setJoinForm, handleJoin, loading: joiningSession || loading, isAdmin, setView, handleSignInWithGoogle }} />
           </motion.div>
         )}
         {view === 'dash' && (
