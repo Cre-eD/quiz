@@ -1581,6 +1581,7 @@ function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJ
 function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }) {
   if (!user?.email || !isAdmin) { setView('home'); return null }
 
+  const [countdown, setCountdown] = useState(3)
   const question = session?.quiz?.questions?.[currentQuestion]
   const answeredCount = Object.keys(session?.answers || {}).length
   const totalPlayers = Object.keys(session?.players || {}).length
@@ -1718,20 +1719,20 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
     )
   }
 
+  // Countdown timer effect
+  useEffect(() => {
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      const interval = setInterval(() => {
+        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        setCountdown(Math.max(0, remaining))
+        if (remaining <= 0) clearInterval(interval)
+      }, 100)
+      return () => clearInterval(interval)
+    }
+  }, [gamePhase, session?.countdownEnd])
+
   // Countdown phase for host
   if (gamePhase === 'countdown') {
-    const [countdown, setCountdown] = useState(3)
-
-    useEffect(() => {
-      if (session?.countdownEnd) {
-        const interval = setInterval(() => {
-          const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
-          setCountdown(Math.max(0, remaining))
-          if (remaining <= 0) clearInterval(interval)
-        }, 100)
-        return () => clearInterval(interval)
-      }
-    }, [session?.countdownEnd])
 
     return (
       <div className="min-h-screen flex flex-col p-6">
