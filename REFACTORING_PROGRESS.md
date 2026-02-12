@@ -69,15 +69,15 @@
 Replace direct Firebase calls with tested service abstractions
 
 ### Tasks Checklist:
-- [ ] Install dependencies (vitest, testing-library, jsdom, isomorphic-dompurify)
-- [ ] Create `src/shared/utils/validation.js` with comprehensive validators
-- [ ] Create `src/shared/utils/sanitization.js` with DOMPurify
-- [ ] Create unit tests for validation utils (100% coverage)
-- [ ] Create unit tests for sanitization utils (100% coverage)
-- [ ] Implement `authService.js` (signIn, signOut, isAdmin)
-- [ ] Create unit tests for authService (100% coverage)
-- [ ] Replace auth calls in App.jsx with authService
-- [ ] Verify Playwright tests still pass
+- [x] Install dependencies (vitest, testing-library, jsdom, isomorphic-dompurify)
+- [x] Create `src/shared/utils/validation.js` with comprehensive validators
+- [x] Create `src/shared/utils/sanitization.js` with DOMPurify
+- [x] Create unit tests for validation utils (100% coverage)
+- [x] Create unit tests for sanitization utils (100% coverage)
+- [x] Implement `authService.js` (signIn, signOut, isAdmin)
+- [x] Create unit tests for authService (100% coverage)
+- [x] Replace auth calls in App.jsx with authService
+- [ ] Verify Playwright tests still pass (deferred - will run at end of phase)
 - [ ] Implement `sessionService.js` (create, join, kick, delete, subscribe)
 - [ ] Create unit tests for sessionService (100% coverage)
 - [ ] Replace session calls in App.jsx with sessionService
@@ -98,30 +98,31 @@ Replace direct Firebase calls with tested service abstractions
 - [ ] Commit Phase 2 changes
 
 ### Files to Create/Modify:
-- `package.json` (add testing dependencies)
-- `vitest.config.js` (new file)
-- `src/tests/setup.js` (new file)
-- `src/shared/utils/validation.js` (new file)
-- `src/shared/utils/validation.test.js` (new file)
-- `src/shared/utils/sanitization.js` (new file)
-- `src/shared/utils/sanitization.test.js` (new file)
-- `src/features/auth/services/authService.js` (implement)
-- `src/features/auth/services/authService.test.js` (new file)
-- `src/features/session/services/sessionService.js` (implement)
-- `src/features/session/services/sessionService.test.js` (new file)
-- `src/features/quiz/services/quizService.js` (implement)
-- `src/features/quiz/services/quizService.test.js` (new file)
-- `src/features/game/services/gameService.js` (implement)
-- `src/features/game/services/gameService.test.js` (new file)
-- `src/features/leaderboard/services/leaderboardService.js` (implement)
-- `src/features/leaderboard/services/leaderboardService.test.js` (new file)
-- `src/App.jsx` (replace Firebase calls with service calls)
+- [x] `package.json` (add testing dependencies)
+- [x] `vitest.config.js` (new file)
+- [x] `vite.config.js` (add path alias)
+- [x] `src/tests/setup.js` (new file)
+- [x] `src/shared/utils/validation.js` (new file)
+- [x] `src/shared/utils/validation.test.js` (new file)
+- [x] `src/shared/utils/sanitization.js` (new file)
+- [x] `src/shared/utils/sanitization.test.js` (new file)
+- [x] `src/features/auth/services/authService.js` (implement)
+- [x] `src/features/auth/services/authService.test.js` (new file)
+- [ ] `src/features/session/services/sessionService.js` (implement)
+- [ ] `src/features/session/services/sessionService.test.js` (new file)
+- [ ] `src/features/quiz/services/quizService.js` (implement)
+- [ ] `src/features/quiz/services/quizService.test.js` (new file)
+- [ ] `src/features/game/services/gameService.js` (implement)
+- [ ] `src/features/game/services/gameService.test.js` (new file)
+- [ ] `src/features/leaderboard/services/leaderboardService.js` (implement)
+- [ ] `src/features/leaderboard/services/leaderboardService.test.js` (new file)
+- [x] `src/App.jsx` (replace Firebase auth calls with authService)
 
 ### Progress Tracking:
 - **Total Tasks:** 26
-- **Completed:** 0
-- **In Progress:** 0
-- **Remaining:** 26
+- **Completed:** 8
+- **In Progress:** 1 (sessionService next)
+- **Remaining:** 17
 
 ---
 
@@ -273,11 +274,29 @@ Each phase is incremental and reversible:
 
 ## Session Notes
 
-### Session 2026-02-12:
+### Session 2026-02-12 (Initial):
 - Completed Phase 1: Foundation Setup
 - Created this tracking document
 - Ready to proceed with Phase 2
 
+### Session 2026-02-12 (Continued):
+- **Validation & Sanitization:**
+  - Created validation.js with 11 validators (62 tests passing)
+  - Created sanitization.js with DOMPurify (52 tests passing)
+  - Committed: 5e6b922
+
+- **AuthService Implementation:**
+  - Created authService.js with all auth methods (32 tests passing)
+  - Refactored App.jsx to use authService instead of direct Firebase calls
+  - Updated vite.config.js with path alias (@/)
+  - Updated vitest.config.js to exclude Playwright tests
+  - Build successful, all 146 unit tests passing
+  - Committed: ac8c188
+
+- **Progress:** 8/26 tasks complete (31%)
+- **Tests:** 146 unit tests passing (validation + sanitization + auth)
+- **Next:** Implement sessionService.js
+
 ---
 
-**Next Action:** Begin Phase 2 - Install testing dependencies and create validation/sanitization utilities
+**Next Action:** Implement sessionService.js with session management operations
