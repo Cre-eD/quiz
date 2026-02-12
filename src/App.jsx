@@ -55,6 +55,7 @@ export default function App() {
   const [playerAnswer, setPlayerAnswer] = useState(null)
   const [scores, setScores] = useState({})
   const [streaks, setStreaks] = useState({})
+  const [coldStreaks, setColdStreaks] = useState({})
   const [answered, setAnswered] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
   const [gamePhase, setGamePhase] = useState('lobby')
@@ -73,8 +74,8 @@ export default function App() {
   const badgeTypes = {
     firstBlood: { icon: '🎯', name: 'First Blood', desc: 'First correct answer' },
     speedDemon: { icon: '⚡', name: 'Speed Demon', desc: 'Answered in under 3 seconds' },
-    perfectStreak: { icon: '🔥', name: 'On Fire', desc: 'Got a 4+ answer streak' },
-    comeback: { icon: '🚀', name: 'Comeback', desc: 'Moved up 3+ places' },
+    perfectStreak: { icon: '🔥', name: 'On Fire', desc: '4+ correct streak' },
+    comeback: { icon: '🚀', name: 'Comeback', desc: 'Broke a 3+ wrong streak' },
     perfectGame: { icon: '👑', name: 'Perfect Game', desc: 'All answers correct' }
   }
 
@@ -290,6 +291,7 @@ export default function App() {
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
+          if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.reactions) setReactions(data.reactions)
           if (data.badges) setBadges(data.badges)
         }
@@ -317,7 +319,7 @@ export default function App() {
           const newPhase = data.status || 'lobby'
 
           // Use ref to detect phase transitions (avoids stale closure issues)
-          if (newPhase === 'question' && prevGamePhaseRef.current !== 'question') {
+          if ((newPhase === 'countdown' || newPhase === 'question') && prevGamePhaseRef.current !== 'countdown' && prevGamePhaseRef.current !== 'question') {
             setAnswered(false)
             setPlayerAnswer(null)
             setMyReactionCount(0) // Reset reaction limit for new question
@@ -331,8 +333,8 @@ export default function App() {
             }
           }
 
-          // Transition from lobby to play view
-          if (newPhase === 'question' && prevGamePhaseRef.current === 'lobby') {
+          // Transition from lobby to play view (on countdown or question)
+          if ((newPhase === 'countdown' || newPhase === 'question') && prevGamePhaseRef.current === 'lobby') {
             setView('play-player')
           }
 
@@ -342,6 +344,7 @@ export default function App() {
           if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
+          if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.badges) setBadges(data.badges)
         }
       })
@@ -407,7 +410,7 @@ export default function App() {
     if (!launchingQuiz) return
     const pin = Math.floor(1000 + Math.random() * 9000).toString()
     const data = {
-      pin, quiz: launchingQuiz, status: 'lobby', players: {}, scores: {}, streaks: {},
+      pin, quiz: launchingQuiz, status: 'lobby', players: {}, scores: {}, streaks: {}, coldStreaks: {},
       currentQuestion: 0, answers: {}, allowLateJoin: true,
       leaderboardId: selectedLeaderboard || null,
       leaderboardName: selectedLeaderboard ? leaderboards.find(lb => lb.id === selectedLeaderboard)?.name : null,
@@ -417,6 +420,7 @@ export default function App() {
     setSession(data)
     setScores({})
     setStreaks({})
+    setColdStreaks({})
     setReactions([])
     setBadges({})
     setCurrentQuestion(0)
@@ -439,6 +443,7 @@ export default function App() {
     updates[`players.${uid}`] = null
     updates[`scores.${uid}`] = null
     updates[`streaks.${uid}`] = null
+    updates[`coldStreaks.${uid}`] = null
     await updateDoc(doc(db, 'sessions', session.pin), updates)
     showToast("Player kicked")
   }
@@ -543,10 +548,28 @@ export default function App() {
   }, [user, isAdmin])
 
   const startGame = async () => {
+    // Start with countdown phase
     await updateDoc(doc(db, 'sessions', session.pin), {
-      status: 'question', currentQuestion: 0, answers: {}, questionStartTime: Date.now(), reactions: []
+      status: 'countdown',
+      currentQuestion: 0,
+      answers: {},
+      countdownEnd: Date.now() + 3000,  // 3-second countdown
+      reactions: []
     })
     setView('play-host')
+
+    // Auto-transition to question phase after countdown
+    setTimeout(async () => {
+      const sessionRef = doc(db, 'sessions', session.pin)
+      const sessionSnap = await getDoc(sessionRef)
+      // Only transition if still in countdown (not manually advanced)
+      if (sessionSnap.exists() && sessionSnap.data().status === 'countdown') {
+        await updateDoc(sessionRef, {
+          status: 'question',
+          questionStartTime: Date.now()
+        })
+      }
+    }, 3000)
   }
 
   const showQuestionResults = async () => {
@@ -555,12 +578,50 @@ export default function App() {
 
   const nextQuestion = async () => {
     const nextQ = currentQuestion + 1
+
+    // Break streaks for players who didn't answer
+    const newStreaks = { ...session.streaks }
+    const newColdStreaks = { ...session.coldStreaks }
+    const answeredPlayers = new Set(Object.keys(session.answers || {}))
+
+    Object.keys(session.players || {}).forEach(uid => {
+      if (!answeredPlayers.has(uid)) {
+        newStreaks[uid] = 0  // Reset streak for non-answerers
+        newColdStreaks[uid] = (newColdStreaks[uid] || 0) + 1  // Increment cold streak
+      }
+    })
+
     if (nextQ >= session.quiz.questions.length) {
-      await updateDoc(doc(db, 'sessions', session.pin), { status: 'final', reactions: [] })
-    } else {
       await updateDoc(doc(db, 'sessions', session.pin), {
-        status: 'question', currentQuestion: nextQ, answers: {}, questionStartTime: Date.now(), reactions: []
+        status: 'final',
+        reactions: [],
+        streaks: newStreaks,
+        coldStreaks: newColdStreaks
       })
+    } else {
+      // Start with countdown phase
+      await updateDoc(doc(db, 'sessions', session.pin), {
+        status: 'countdown',
+        currentQuestion: nextQ,
+        answers: {},
+        countdownEnd: Date.now() + 3000,  // 3-second countdown
+        reactions: [],
+        streaks: newStreaks,
+        coldStreaks: newColdStreaks
+      })
+
+      // Auto-transition to question phase after countdown
+      setTimeout(async () => {
+        const sessionRef = doc(db, 'sessions', session.pin)
+        const sessionSnap = await getDoc(sessionRef)
+        // Only transition if still in countdown (not manually advanced)
+        if (sessionSnap.exists() && sessionSnap.data().status === 'countdown') {
+          await updateDoc(sessionRef, {
+            status: 'question',
+            questionStartTime: Date.now()
+          })
+        }
+      }, 3000)
     }
   }
 
@@ -603,12 +664,44 @@ export default function App() {
 
   const submitAnswer = async (answerIndex, answerTime = null) => {
     if (answered) return
+
+    // Grace period check - allow 3 seconds after timer ends
+    const questionEndTime = session.questionStartTime + (25 * 1000)  // 25 seconds
+    const GRACE_PERIOD = 3000  // 3 seconds grace
+    const now = Date.now()
+
+    if (now > questionEndTime + GRACE_PERIOD) {
+      showToast("Time's up! Answer not counted.", "error")
+      setAnswered(true)
+      return
+    }
+
     setAnswered(true)
     setPlayerAnswer(answerIndex)
     haptic.medium()
 
     const question = session.quiz.questions[currentQuestion]
     const isCorrect = answerIndex === question.correct
+
+    const currentStreak = streaks[user.uid] || 0
+    const currentColdStreak = coldStreaks[user.uid] || 0
+
+    let comebackBonus = 0
+    let comebackMessage = null
+
+    // Comeback bonus for breaking cold streak
+    if (isCorrect && currentColdStreak >= 2) {
+      if (currentColdStreak === 2) {
+        comebackBonus = 50
+        comebackMessage = "🔥 Warming Up!"
+      } else if (currentColdStreak === 3) {
+        comebackBonus = 100
+        comebackMessage = "🚀 Comeback!"
+      } else if (currentColdStreak >= 4) {
+        comebackBonus = 200
+        comebackMessage = "🔥 Phoenix Rising!"
+      }
+    }
 
     // Haptic and visual feedback based on answer
     if (isCorrect) {
@@ -620,11 +713,13 @@ export default function App() {
       setTimeout(() => setShakeScreen(false), 500)
     }
 
-    const currentStreak = streaks[user.uid] || 0
     const newStreak = isCorrect ? currentStreak + 1 : 0
+    const newColdStreak = isCorrect ? 0 : currentColdStreak + 1
+
     const multiplier = isCorrect ? getStreakMultiplier(newStreak) : 1
     const basePoints = isCorrect ? 100 : 0
-    const points = basePoints * multiplier
+    const points = basePoints * multiplier + comebackBonus
+
     const currentScore = scores[user.uid] || 0
     const currentCorrectCount = session.correctCounts?.[user.uid] || 0
     const newCorrectCount = isCorrect ? currentCorrectCount + 1 : currentCorrectCount
@@ -633,8 +728,11 @@ export default function App() {
     const newBadges = { ...(badges[user.uid] || {}) }
     const totalQuestions = session.quiz.questions.length
 
-    // First Blood - first correct answer in the game
-    if (isCorrect && currentQuestion === 0 && Object.keys(session.answers || {}).length === 0) {
+    // First Blood - first correct answer in the question
+    const isFirstCorrect = Object.values(session.answers || {}).filter(a =>
+      a.answerIndex === question.correct
+    ).length === 0
+    if (isCorrect && isFirstCorrect) {
       newBadges.firstBlood = true
     }
 
@@ -651,18 +749,29 @@ export default function App() {
       haptic.streak()
     }
 
+    // Comeback badge - breaking 3+ wrong streak
+    if (comebackBonus >= 100 && !newBadges.comeback) {
+      newBadges.comeback = true
+    }
+
     // Perfect Game - all correct (check on last question)
     if (currentQuestion === totalQuestions - 1 && isCorrect && newCorrectCount === totalQuestions) {
       newBadges.perfectGame = true
     }
 
     await updateDoc(doc(db, 'sessions', session.pin), {
-      [`answers.${user.uid}`]: answerIndex,
+      [`answers.${user.uid}`]: { answerIndex, answerTime, timestamp: now },
       [`scores.${user.uid}`]: currentScore + points,
       [`streaks.${user.uid}`]: newStreak,
+      [`coldStreaks.${user.uid}`]: newColdStreak,
       [`correctCounts.${user.uid}`]: newCorrectCount,
       [`badges.${user.uid}`]: newBadges
     })
+
+    // Show comeback message
+    if (comebackMessage) {
+      showToast(comebackMessage, "success")
+    }
   }
 
   const leaderboard = Object.entries(scores)
@@ -721,7 +830,7 @@ export default function App() {
         )}
         {view === 'play-player' && (
           <motion.div key="play-player" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey }} />
+            <PlayerPlayView {...{ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -1609,6 +1718,55 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
     )
   }
 
+  // Countdown phase for host
+  if (gamePhase === 'countdown') {
+    const [countdown, setCountdown] = useState(3)
+
+    useEffect(() => {
+      if (session?.countdownEnd) {
+        const interval = setInterval(() => {
+          const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+          setCountdown(Math.max(0, remaining))
+          if (remaining <= 0) clearInterval(interval)
+        }, 100)
+        return () => clearInterval(interval)
+      }
+    }, [session?.countdownEnd])
+
+    return (
+      <div className="min-h-screen flex flex-col p-6">
+        <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
+          <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{totalPlayers} players</span>
+        </div>
+
+        <div className="flex-grow flex flex-col items-center justify-center text-center py-8 relative">
+          <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>
+
+          <div className="grid grid-cols-2 gap-4 w-full max-w-4xl opacity-30">
+            {question?.options.map((opt, idx) => (
+              <div key={idx} className={`${optionColors[idx].bg} p-6 rounded-2xl flex flex-col items-center justify-center gap-3`}>
+                <i className={`fa ${optionColors[idx].icon} text-3xl opacity-75`}></i>
+                <span className="text-xl font-semibold text-center">{opt}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Countdown overlay */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="bg-slate-900/95 px-16 py-10 rounded-3xl border-2 border-blue-500/50 shadow-2xl">
+              <div className="text-9xl font-black gradient-text animate-pulse mb-2">
+                {countdown}
+              </div>
+              <p className="text-slate-400 text-xl text-center">Starting...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col p-6">
       <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
@@ -1666,16 +1824,50 @@ function WaitView({ joinForm }) {
   )
 }
 
-function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey }) {
+function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
+  const [countdown, setCountdown] = useState(3)
+  const [canSubmit, setCanSubmit] = useState(true)
+
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
   const myStreak = streaks?.[user?.uid] || 0
+  const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
   // Use session's questionStartTime for accurate speed tracking
   const questionStartTime = session?.questionStartTime || Date.now()
   const myScore = scores?.[user?.uid] || 0
+
+  // Countdown timer for countdown phase
+  useEffect(() => {
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      const interval = setInterval(() => {
+        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        setCountdown(Math.max(0, remaining))
+        if (remaining <= 0) clearInterval(interval)
+      }, 100)
+      return () => clearInterval(interval)
+    }
+  }, [gamePhase, session?.countdownEnd])
+
+  // Button disable logic - disable 1 second before deadline
+  useEffect(() => {
+    if (gamePhase !== 'question' || !questionStartTime) return
+
+    setCanSubmit(true) // Reset when question phase starts
+
+    const questionEndTime = questionStartTime + (25 * 1000)
+    const clientDeadline = questionEndTime - 1000  // 1 second before server deadline
+
+    const checkDeadline = setInterval(() => {
+      if (Date.now() >= clientDeadline && !answered) {
+        setCanSubmit(false)
+      }
+    }, 100)
+
+    return () => clearInterval(checkDeadline)
+  }, [gamePhase, questionStartTime, answered])
 
   // My badges display
   const MyBadges = () => {
@@ -1776,6 +1968,43 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
     )
   }
 
+  // Countdown phase - show question but disable buttons
+  if (gamePhase === 'countdown') {
+    return (
+      <div className="min-h-screen flex flex-col p-4">
+        <div className="text-center mb-6">
+          <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
+          <h2 className="text-2xl font-bold">{question?.text}</h2>
+        </div>
+
+        {/* Answer options visible but disabled with countdown overlay */}
+        <div className="flex-grow grid grid-cols-2 gap-3 relative">
+          {question?.options.map((opt, idx) => (
+            <div key={idx} className="relative">
+              <button
+                disabled
+                className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 w-full h-full opacity-50 cursor-not-allowed`}
+              >
+                <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
+                <span className="text-lg font-semibold text-center">{opt}</span>
+              </button>
+            </div>
+          ))}
+
+          {/* Centered countdown overlay */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="bg-slate-900/95 px-12 py-8 rounded-3xl border-2 border-blue-500/50 shadow-2xl">
+              <div className="text-8xl font-black gradient-text animate-pulse mb-2">
+                {countdown}
+              </div>
+              <p className="text-slate-400 text-lg text-center">Get ready...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (answered) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
@@ -1822,6 +2051,15 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
         </div>
       )}
 
+      {/* Cold streak indicator */}
+      {myColdStreak >= 2 && (
+        <div className="mb-3 bg-orange-500/20 border border-orange-500/50 rounded-xl p-3 text-center">
+          <span className="text-orange-400 text-sm">
+            ❄️ {myColdStreak} wrong in a row - break the streak for bonus points!
+          </span>
+        </div>
+      )}
+
       <div className="text-center mb-6">
         <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
         <h2 className="text-2xl font-bold">{question?.text}</h2>
@@ -1831,12 +2069,14 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
         {question?.options.map((opt, idx) => (
           <button
             key={idx}
+            disabled={!canSubmit}
             onClick={() => {
+              if (!canSubmit) return
               haptic.light()
               const answerTime = Date.now() - questionStartTime
               submitAnswer(idx, answerTime)
             }}
-            className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal`}
+            className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}
             style={{ animationDelay: `${idx * 0.1}s` }}
           >
             <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
@@ -1844,6 +2084,12 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
           </button>
         ))}
       </div>
+
+      {!canSubmit && (
+        <div className="text-center mt-2 text-red-400 text-sm">
+          <i className="fa fa-clock mr-1"></i>Time's up!
+        </div>
+      )}
 
       {/* Reaction buttons - compact bar at bottom */}
       {canReact && (
