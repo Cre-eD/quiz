@@ -1581,14 +1581,8 @@ function HostLobbyView({ user, isAdmin, setView, session, startGame, toggleLateJ
 }
 
 function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }) {
-  if (!user?.email || !isAdmin) { setView('home'); return null }
-
+  // ALL HOOKS MUST BE AT THE TOP - React requires this!
   const [countdown, setCountdown] = useState(3)
-  const question = session?.quiz?.questions?.[currentQuestion]
-  const answeredCount = Object.keys(session?.answers || {}).length
-  const totalPlayers = Object.keys(session?.players || {}).length
-
-  // Ref to the container where we'll append reactions directly to DOM
   const reactionsContainerRef = useRef(null)
   const processedIdsRef = useRef(new Set())
 
@@ -1626,6 +1620,26 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
     const container = reactionsContainerRef.current
     if (container) container.innerHTML = ''
   }, [currentQuestion])
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      const interval = setInterval(() => {
+        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        setCountdown(Math.max(0, remaining))
+        if (remaining <= 0) clearInterval(interval)
+      }, 100)
+      return () => clearInterval(interval)
+    }
+  }, [gamePhase, session?.countdownEnd])
+
+  // Derived values (can be after hooks, before conditionals)
+  const question = session?.quiz?.questions?.[currentQuestion]
+  const answeredCount = Object.keys(session?.answers || {}).length
+  const totalPlayers = Object.keys(session?.players || {}).length
+
+  // Auth check AFTER all hooks to prevent hooks violation
+  if (!user?.email || !isAdmin) { setView('home'); return null }
 
   // Player badges display
   const PlayerBadges = ({ uid }) => {
@@ -1720,18 +1734,6 @@ function HostPlayView({ user, isAdmin, setView, session, gamePhase, currentQuest
       </div>
     )
   }
-
-  // Countdown timer effect
-  useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
-      const interval = setInterval(() => {
-        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
-        setCountdown(Math.max(0, remaining))
-        if (remaining <= 0) clearInterval(interval)
-      }, 100)
-      return () => clearInterval(interval)
-    }
-  }, [gamePhase, session?.countdownEnd])
 
   // Countdown phase for host
   if (gamePhase === 'countdown') {
@@ -1828,9 +1830,7 @@ function WaitView({ joinForm }) {
 }
 
 function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
-  // Calculate initial countdown from session data
-  const initialCountdown = session?.countdownEnd ? Math.max(0, Math.ceil((session.countdownEnd - Date.now()) / 1000)) : 3
-  const [countdown, setCountdown] = useState(initialCountdown)
+  const [countdown, setCountdown] = useState(3)
   const [canSubmit, setCanSubmit] = useState(true)
 
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
@@ -1857,12 +1857,17 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
         if (remaining <= 0) clearInterval(interval)
       }, 100)
       return () => clearInterval(interval)
+    } else {
+      setCountdown(3) // Reset to default when not in countdown
     }
   }, [gamePhase, session?.countdownEnd])
 
   // Button disable logic - disable 1 second before deadline
   useEffect(() => {
-    if (gamePhase !== 'question' || !questionStartTime) return
+    if (gamePhase !== 'question' || !questionStartTime) {
+      setCanSubmit(true) // Reset when not in question phase
+      return
+    }
 
     setCanSubmit(true) // Reset when question phase starts
 
