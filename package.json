@@ -17,8 +17,12 @@
     "test:e2e:debug": "npx playwright test --debug",
     "test:e2e:report": "npx playwright show-report",
     "test:all": "vitest run && npx playwright test",
+    "test:local": "bash scripts/test-local.sh",
+    "test:smoke": "npx playwright test smoke.spec.js",
+    "validate": "bash scripts/validate-build.sh",
     "deploy": "npm run build && firebase deploy",
     "deploy:prod": "bash scripts/deploy-prod.sh",
+    "deploy:safe": "bash scripts/deploy-with-tests.sh",
     "upload-quiz": "node scripts/upload-quiz.js",
     "upload-all": "node scripts/upload-quiz.js --all",
     "list-quizzes": "node scripts/upload-quiz.js --list"
