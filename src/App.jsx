@@ -5,7 +5,7 @@ import { gameService } from './features/game/services/gameService'
 import { useAuth } from './features/auth/hooks/useAuth'
 import { useQuizzes } from './features/quiz/hooks/useQuizzes'
 import { useLeaderboards } from './features/leaderboard/hooks/useLeaderboards'
-import { optionColors } from './constants'
+import { optionColors, categoryConfig } from './constants'
 import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
 import ConfirmModal from './components/ConfirmModal'
@@ -582,15 +582,6 @@ export default function App() {
       <Confetti show={showConfetti} />
     </div>
   )
-}
-
-// ============ VIEW COMPONENTS ============
-
-// Quiz category colors and icons
-const categoryConfig = {
-  pre: { color: 'emerald', icon: 'play-circle', label: 'Pre', bgClass: 'bg-emerald-600/20', textClass: 'text-emerald-400', borderClass: 'border-emerald-500/30' },
-  mid: { color: 'amber', icon: 'pause-circle', label: 'Mid', bgClass: 'bg-amber-600/20', textClass: 'text-amber-400', borderClass: 'border-amber-500/30' },
-  post: { color: 'blue', icon: 'stop-circle', label: 'Post', bgClass: 'bg-blue-600/20', textClass: 'text-blue-400', borderClass: 'border-blue-500/30' }
 }
 
 

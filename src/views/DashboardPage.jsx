@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { categoryConfig } from '@/constants'
 import ConfirmModal from '@/components/ConfirmModal'
 import QuizLevelGroup from '@/features/quiz/components/QuizLevelGroup'
 import CourseFilter from '@/features/quiz/components/CourseFilter'
