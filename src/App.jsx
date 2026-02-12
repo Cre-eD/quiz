@@ -46,15 +46,18 @@ export default function App() {
   const showConfirm = (config) => setConfirmModal({ isOpen: true, ...config })
 
   // Custom hooks - v1.0.1
-  const { user, isAdmin, loading, handleSignInWithGoogle: signIn, signOutAdmin: signOut } = useAuth()
+  const auth = useAuth()
+  const user = auth.user
+  const isAdmin = auth.isAdmin
+  const loading = auth.loading
 
   // Wrap auth handlers with view navigation
-  const handleSignInWithGoogle = () => signIn(
+  const handleSignInWithGoogle = () => auth.handleSignInWithGoogle(
     () => { setView('dash'); showToast("Welcome back, Admin!") },
     (error) => showToast(error, "error")
   )
 
-  const signOutAdmin = () => signOut(
+  const signOutAdmin = () => auth.signOutAdmin(
     () => { setView('home'); showToast("Signed out successfully") }
   )
 

@@ -8,7 +8,7 @@ export function useAuth() {
 
   const handleSignInWithGoogle = async (onSuccess, onError) => {
     setLoading(true)
-    const result = await authService.handleSignInWithGoogle()
+    const result = await authService.signInWithGoogle()
 
     if (result.requiresRedirect) {
       return
