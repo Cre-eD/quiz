@@ -13,8 +13,8 @@
 - [x] **Phase 3: Context Providers** 🔨 PARTIAL - Infrastructure ready (Commit: e85297b)
 - [x] **Phase 4: View Extraction** ✅ COMPLETE (Commit: 26673dc)
 - [x] **Phase 5: Component Extraction** ✅ COMPLETE (Commits: a7d580f, 305da14)
-- [ ] **Phase 6: Custom Hooks** 📋 NEXT
-- [ ] **Phase 7: Security Hardening**
+- [x] **Phase 6: Custom Hooks** 🔨 PARTIAL - 3 hooks created (Commit: a403187)
+- [ ] **Phase 7: Security Hardening** 📋 NEXT
 - [ ] **Phase 8: Testing Infrastructure**
 
 ---
@@ -268,20 +268,59 @@ Extract reusable components from view files to improve code organization and mai
 
 ---
 
-## Phase 6: Custom Hooks (Planned)
+## Phase 6: Custom Hooks 🔨 PARTIAL
 
-**Target:** Week 5
+**Started:** 2026-02-12
+**Status:** 3 core hooks created, integration pending
+**Commit:** a403187
 
-### Tasks:
-- [ ] Create useAuth hook
-- [ ] Create useQuizzes hook
-- [ ] Create useSession hook
-- [ ] Create useGameState hook
-- [ ] Create useStreaks hook
-- [ ] Create useBadges hook
-- [ ] Create useReactions hook
-- [ ] Create useAnswerSubmission hook
-- [ ] Create useLeaderboards hook
+### Goal:
+Extract stateful logic from App.jsx into reusable custom hooks for better organization and testability
+
+### Tasks Completed:
+- [x] Create useAuth hook (84 lines)
+- [x] Create useQuizzes hook (75 lines)
+- [x] Create useLeaderboards hook (138 lines)
+
+### Tasks Remaining:
+- [ ] Create useGameState hook (complex - scores, streaks, badges, phases)
+- [ ] Create useSession hook (complex - session lifecycle, subscriptions)
+- [ ] Integrate hooks into App.jsx
+- [ ] Create tests for custom hooks
+- [ ] Verify build and all 288 tests pass
+
+### Hooks Created:
+
+**useAuth** (src/features/auth/hooks/useAuth.js):
+- Manages authentication state (user, isAdmin, loading)
+- Handles Google sign-in with admin validation
+- Handles sign-out
+- Listens to auth state changes
+- Handles OAuth redirect results
+
+**useQuizzes** (src/features/quiz/hooks/useQuizzes.js):
+- Manages quiz list and active quiz state
+- Handles quiz import from JSON
+- Handles quiz save/delete operations
+- Subscribes to quiz collection
+- Manages import UI state
+
+**useLeaderboards** (src/features/leaderboard/hooks/useLeaderboards.js):
+- Manages leaderboard list and UI state
+- Handles leaderboard CRUD operations
+- Manages modal states (create, rename, view)
+- Subscribes to leaderboard collection
+- Provides getLeaderboardPlayers utility
+- Handles saving scores to leaderboards
+
+**Total:** 3 hooks, 297 lines extracted
+
+### Next Steps:
+1. Create useGameState and useSession hooks (most complex)
+2. Integrate all hooks into App.jsx
+3. Remove replaced code from App.jsx (target: -200+ lines)
+4. Create unit tests for hooks
+5. Verify zero breaking changes
 
 ---
 
