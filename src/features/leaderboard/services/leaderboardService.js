@@ -15,13 +15,14 @@ import {
 import { db } from '@/lib/firebase/config'
 import { sanitizeLeaderboardName } from '@/shared/utils/sanitization'
 import { validators } from '@/shared/utils/validation'
+import { generateSecureId } from '@/shared/utils/crypto'
 
 /**
- * Generate a random ID for a leaderboard
+ * Generate a cryptographically secure random ID for a leaderboard
  * @returns {string} - Random ID
  */
 function generateLeaderboardId() {
-  return Math.random().toString(36).substring(2, 11)
+  return generateSecureId(11)
 }
 
 /**

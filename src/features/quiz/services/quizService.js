@@ -13,13 +13,14 @@ import {
 import { db } from '@/lib/firebase/config'
 import { sanitizeQuiz } from '@/shared/utils/sanitization'
 import { validateQuiz } from '@/shared/utils/validation'
+import { generateSecureId } from '@/shared/utils/crypto'
 
 /**
- * Generate a random ID for a quiz
+ * Generate a cryptographically secure random ID for a quiz
  * @returns {string} - Random ID
  */
 function generateQuizId() {
-  return Math.random().toString(36).substring(2, 11)
+  return generateSecureId(11)
 }
 
 /**

@@ -75,16 +75,17 @@ import {
   subscribeToSession,
   updateSession
 } from './sessionService'
+import { rateLimiter } from '@/shared/utils/rateLimit'
 
 describe('sessionService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     localStorage.clear()
+    rateLimiter.clearAll() // Reset rate limits before each test
     mockDoc.mockReturnValue({ id: 'mock-doc-ref' })
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(Math, 'random').mockReturnValue(0.5) // Generates PIN 5500
   })
 
   afterEach(() => {
@@ -102,7 +103,9 @@ describe('sessionService', () => {
       const result = await createSession({ quiz })
 
       expect(result.success).toBe(true)
-      expect(result.pin).toBe('5500')
+      expect(result.pin).toMatch(/^\d{4}$/) // 4-digit PIN (cryptographically random)
+      expect(parseInt(result.pin)).toBeGreaterThanOrEqual(1000)
+      expect(parseInt(result.pin)).toBeLessThan(10000)
       expect(result.session.quiz).toEqual(quiz)
       expect(result.session.status).toBe('lobby')
       expect(mockSetDoc).toHaveBeenCalled()

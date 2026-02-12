@@ -39,7 +39,7 @@
   },
   "homepage": "https://github.com/Cre-eD/quiz#readme",
   "dependencies": {
-    "firebase": "^10.8.0",
+    "firebase": "^12.9.0",
     "framer-motion": "^12.25.0",
     "isomorphic-dompurify": "^3.0.0-rc.2",
     "react": "^18.2.0",

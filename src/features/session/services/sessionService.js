@@ -14,14 +14,16 @@ import {
 import { db } from '@/lib/firebase/config'
 import { sanitizePlayerName } from '@/shared/utils/sanitization'
 import { validators } from '@/shared/utils/validation'
+import { generateSecurePIN } from '@/shared/utils/crypto'
+import { checkSessionJoinLimit, resetSessionJoinLimit } from '@/shared/utils/rateLimit'
 
 /**
- * Generate a random 4-digit PIN for a session
- * Uses Math.random() (note: will be replaced with crypto.getRandomValues in Phase 7)
+ * Generate a cryptographically secure random 4-digit PIN for a session
+ * Uses crypto.getRandomValues() for secure random number generation
  * @returns {string} - 4-digit PIN
  */
 function generatePIN() {
-  return Math.floor(1000 + Math.random() * 9000).toString()
+  return generateSecurePIN()
 }
 
 /**
@@ -126,6 +128,15 @@ export async function getSession(pin) {
  */
 export async function joinSession({ pin, name, userId }) {
   try {
+    // Rate limit check (prevent spam/brute force)
+    const rateLimit = checkSessionJoinLimit()
+    if (!rateLimit.allowed) {
+      return {
+        success: false,
+        error: `Too many join attempts. Please wait ${rateLimit.resetIn} seconds.`
+      }
+    }
+
     // Validate inputs
     const pinValidation = validators.pin(pin)
     if (!pinValidation.valid) {
@@ -200,6 +211,9 @@ export async function joinSession({ pin, name, userId }) {
       console.warn('Failed to save session to localStorage:', e)
     }
 
+    // Reset rate limit on successful join
+    resetSessionJoinLimit()
+
     return {
       success: true,
       session: sessionData,
@@ -228,11 +242,13 @@ export async function recoverSession(userId) {
 
     const { pin, name } = JSON.parse(saved)
 
-    // Validate saved data
+    // Validate and sanitize saved data (protect against localStorage injection)
     if (!pin || !name) {
       localStorage.removeItem('quizSession')
       return { success: false, error: 'Invalid saved session data' }
     }
+
+    const sanitizedName = sanitizePlayerName(name)
 
     const snap = await getDoc(doc(db, 'sessions', pin))
 
@@ -253,7 +269,7 @@ export async function recoverSession(userId) {
       success: true,
       session: sessionData,
       pin,
-      name
+      name: sanitizedName // Use sanitized name to prevent XSS
     }
   } catch (error) {
     console.error('Recover session error:', error)

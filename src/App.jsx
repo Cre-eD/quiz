@@ -267,7 +267,7 @@ export default function App() {
     const result = await sessionService.joinSession({
       pin: joinForm.pin,
       userId: user.uid,
-      displayName: joinForm.name
+      name: joinForm.name
     })
 
     if (result.success) {
@@ -392,6 +392,7 @@ export default function App() {
       pin: session.pin,
       emoji,
       playerName,
+      userId: user.uid,
       currentReactions: session.reactions
     })
 

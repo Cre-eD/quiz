@@ -29,6 +29,7 @@ lib-cov/
 .env.*.local
 *.env
 service-account.json
+serviceAccountKey.json
 
 # IDE and editor files
 .idea/

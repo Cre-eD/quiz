@@ -8,6 +8,8 @@
 
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
+import { secureRandom } from '@/shared/utils/crypto'
+import { checkReactionSendLimit } from '@/shared/utils/rateLimit'
 
 /**
  * Start a game session (transition to countdown phase)
@@ -180,6 +182,7 @@ export async function nextQuestion({
  * @param {string} params.pin - Session PIN
  * @param {string} params.emoji - Emoji to send
  * @param {string} params.playerName - Player's display name
+ * @param {string} params.userId - User ID (for rate limiting)
  * @param {Array} params.currentReactions - Current reactions array
  * @returns {Promise<Object>} - Object with { success: boolean, error?: string }
  */
@@ -187,6 +190,7 @@ export async function sendReaction({
   pin,
   emoji,
   playerName,
+  userId,
   currentReactions
 }) {
   try {
@@ -194,8 +198,19 @@ export async function sendReaction({
       return { success: false, error: 'PIN, emoji, and playerName are required' }
     }
 
+    // Rate limit check (10 reactions per minute per user)
+    if (userId) {
+      const rateLimit = checkReactionSendLimit(userId)
+      if (!rateLimit.allowed) {
+        return {
+          success: false,
+          error: `Too many reactions. Please wait ${rateLimit.resetIn} seconds.`
+        }
+      }
+    }
+
     const reaction = {
-      id: Date.now() + Math.random(),
+      id: Date.now() + secureRandom(),
       emoji,
       playerName,
       timestamp: Date.now()
