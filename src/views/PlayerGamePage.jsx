@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
+import MyBadges from '@/features/game/components/MyBadges'
 import { optionColors } from '@/constants'
 import { haptic } from '@/utils/haptic'
 
@@ -58,21 +59,6 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     return () => clearInterval(checkDeadline)
   }, [gamePhase, questionStartTime, answered])
 
-  // My badges display
-  const MyBadges = () => {
-    const earnedBadges = Object.keys(myBadges).filter(k => myBadges[k])
-    if (earnedBadges.length === 0) return null
-    return (
-      <div className="flex flex-wrap justify-center gap-2 mb-4">
-        {earnedBadges.map(badge => (
-          <span key={badge} className="bg-slate-800 px-3 py-1 rounded-full text-sm flex items-center gap-1">
-            <span>{badgeTypes[badge]?.icon}</span>
-            <span>{badgeTypes[badge]?.name}</span>
-          </span>
-        ))}
-      </div>
-    )
-  }
 
   if (gamePhase === 'final') {
     const myRank = leaderboard.findIndex(p => p.uid === user?.uid) + 1
@@ -102,7 +88,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
         </h2>
         <p className="text-3xl text-slate-300 mb-2">#{myRank} Place</p>
         <p className="text-xl text-slate-500 mb-4">{myScore} points</p>
-        <MyBadges />
+        <MyBadges badges={myBadges} badgeTypes={badgeTypes} />
 
         <button onClick={() => {localStorage.removeItem('quizSession'); setView('home'); setSession(null); setJoinForm({ pin: '', name: '' });}} className="btn-gradient px-8 py-4 rounded-2xl font-bold">
           <i className="fa fa-home mr-2"></i>Back to Home
