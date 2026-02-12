@@ -47,6 +47,7 @@ export async function createSession({ quiz, leaderboardId = null, leaderboardNam
     const pin = generatePIN()
     const sessionData = {
       pin,
+      quizId: quiz.id || pin, // Firestore rules require quizId
       quiz,
       status: 'lobby',
       players: {},
@@ -61,7 +62,8 @@ export async function createSession({ quiz, leaderboardId = null, leaderboardNam
       reactions: [],
       badges: {},
       correctCounts: {},
-      bannedUsers: []
+      bannedUsers: [],
+      createdAt: Date.now() // Firestore rules require createdAt
     }
 
     await setDoc(doc(db, 'sessions', pin), sessionData)

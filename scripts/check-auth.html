@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Auth Debug</title>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCKtogNq4zoiAd6dGa16nerndhKj3iA7Hs",
+      authDomain: "devops-quiz-2c930.firebaseapp.com",
+      projectId: "devops-quiz-2c930",
+      appId: "1:86349315764:web:2f579516f90219ed20a1e1"
+    }
+
+    const app = initializeApp(firebaseConfig)
+    const auth = getAuth(app)
+
+    onAuthStateChanged(auth, async (user) => {
+      const output = document.getElementById('output')
+
+      if (user) {
+        const token = await user.getIdTokenResult()
+
+        output.innerHTML = `
+          <h2 style="color: green">✅ Authenticated</h2>
+          <pre style="background: #f5f5f5; padding: 20px; border-radius: 8px;">
+<strong>User Info:</strong>
+UID:   ${user.uid}
+Email: ${user.email}
+Email (lowercase): ${user.email?.toLowerCase()}
+
+<strong>Expected Admin Email:</strong>
+creeed22@gmail.com
+
+<strong>Match?</strong> ${user.email?.toLowerCase() === 'creeed22@gmail.com' ? '✅ YES' : '❌ NO'}
+
+<strong>Token Claims:</strong>
+${JSON.stringify(token.claims, null, 2)}
+
+<strong>Auth Provider:</strong>
+${user.providerData.map(p => p.providerId).join(', ')}
+          </pre>
+        `
+      } else {
+        output.innerHTML = `
+          <h2 style="color: red">❌ Not Authenticated</h2>
+          <p>Please sign in on the main app first, then refresh this page.</p>
+        `
+      }
+    })
+  </script>
+</head>
+<body style="font-family: system-ui; padding: 40px; max-width: 800px; margin: 0 auto;">
+  <h1>🔍 Auth Debugger</h1>
+  <div id="output">
+    <p>Loading...</p>
+  </div>
+</body>
+</html>
