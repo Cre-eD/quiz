@@ -12,6 +12,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/tests/**',
+      '**/e2e/**',
       '**/.{idea,git,cache,output,temp}/**'
     ],
     coverage: {
