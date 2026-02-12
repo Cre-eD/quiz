@@ -10,27 +10,16 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
   }, [duration, startTime])
 
   useEffect(() => {
-    if (!isRunning) return
+    if (!isRunning || !startTime) return
 
     const updateTimer = () => {
-      if (startTime) {
-        const elapsed = (Date.now() - startTime) / 1000
-        const remaining = Math.max(0, duration - elapsed)
-        setTimeLeft(remaining)
+      const elapsed = (Date.now() - startTime) / 1000
+      const remaining = Math.max(0, duration - elapsed)
+      setTimeLeft(remaining)
 
-        if (remaining <= 0 && !completedRef.current) {
-          completedRef.current = true
-          onComplete?.()
-        }
-      } else {
-        setTimeLeft(t => {
-          const newTime = t - 0.1
-          if (newTime <= 0 && !completedRef.current) {
-            completedRef.current = true
-            onComplete?.()
-          }
-          return Math.max(0, newTime)
-        })
+      if (remaining <= 0 && !completedRef.current) {
+        completedRef.current = true
+        onComplete?.()
       }
     }
 

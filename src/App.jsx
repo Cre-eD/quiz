@@ -1828,7 +1828,9 @@ function WaitView({ joinForm }) {
 }
 
 function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
-  const [countdown, setCountdown] = useState(3)
+  // Calculate initial countdown from session data
+  const initialCountdown = session?.countdownEnd ? Math.max(0, Math.ceil((session.countdownEnd - Date.now()) / 1000)) : 3
+  const [countdown, setCountdown] = useState(initialCountdown)
   const [canSubmit, setCanSubmit] = useState(true)
 
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
@@ -1838,13 +1840,17 @@ function PlayerPlayView({ session, gamePhase, currentQuestion, user, scores, str
   const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
-  // Use session's questionStartTime for accurate speed tracking
-  const questionStartTime = session?.questionStartTime || Date.now()
+  // Use session's questionStartTime for accurate speed tracking (null during countdown)
+  const questionStartTime = session?.questionStartTime
   const myScore = scores?.[user?.uid] || 0
 
   // Countdown timer for countdown phase
   useEffect(() => {
     if (gamePhase === 'countdown' && session?.countdownEnd) {
+      // Immediately set countdown to correct value
+      const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+      setCountdown(Math.max(0, remaining))
+
       const interval = setInterval(() => {
         const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
         setCountdown(Math.max(0, remaining))
