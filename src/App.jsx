@@ -45,7 +45,7 @@ export default function App() {
   const showToast = (message, type = "success") => setToast({ message, type })
   const showConfirm = (config) => setConfirmModal({ isOpen: true, ...config })
 
-  // Custom hooks
+  // Custom hooks - v1.0.1
   const { user, isAdmin, loading, handleSignInWithGoogle: signIn, signOutAdmin: signOut } = useAuth()
 
   // Wrap auth handlers with view navigation
