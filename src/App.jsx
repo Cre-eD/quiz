@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { signInAnonymously, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth'
 import { doc, setDoc, getDoc, updateDoc, onSnapshot, collection, deleteDoc } from 'firebase/firestore'
-import { auth, db, googleProvider, ADMIN_EMAIL } from './lib/firebase/config'
+import { db } from './lib/firebase/config'
+import { authService } from './features/auth/services/authService'
 import { optionColors } from './constants'
 import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
@@ -81,76 +81,73 @@ export default function App() {
 
   const showToast = (message, type = "success") => setToast({ message, type })
 
-  const checkAdmin = (u) => {
-    if (!u || !u.email) return false
-    return u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
-  }
-
-  const signInWithGoogle = async () => {
+  const handleSignInWithGoogle = async () => {
     setLoading(true)
-    try {
-      const result = await signInWithPopup(auth, googleProvider)
-      await handleAuthResult(result.user)
-    } catch (popupError) {
-      if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/popup-closed-by-user') {
-        sessionStorage.setItem('authRedirect', 'dash')
-        signInWithRedirect(auth, googleProvider)
-      } else {
-        showToast("Sign-in failed: " + (popupError.message || "Unknown error"), "error")
-        setLoading(false)
-      }
+    const result = await authService.handleSignInWithGoogle()
+
+    if (result.requiresRedirect) {
+      // Redirect in progress, don't update loading state
+      return
     }
-  }
 
-  const handleAuthResult = async (authUser) => {
-    if (!authUser) return
-    const userEmail = (authUser.email || '').toLowerCase()
+    if (!result.success) {
+      showToast("Sign-in failed: " + result.error, "error")
+      setLoading(false)
+      return
+    }
 
-    if (userEmail === ADMIN_EMAIL.toLowerCase()) {
+    // Validate admin access
+    const validation = await authService.validateAdminAccess(result.user)
+    if (validation.isAdmin) {
       setIsAdmin(true)
       setView('dash')
       showToast("Welcome back, Admin!")
     } else {
-      await signOut(auth)
-      showToast("Access denied. Only " + ADMIN_EMAIL + " can access the dashboard.", "error")
-      await signInAnonymously(auth)
+      showToast(validation.error, "error")
     }
     setLoading(false)
   }
 
   useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth)
-        if (result && result.user) {
-          sessionStorage.removeItem('authRedirect')
-          await handleAuthResult(result.user)
-        }
-      } catch (e) {
+    const handleRedirect = async () => {
+      const result = await authService.handleRedirectResult()
+
+      if (result.error) {
         showToast("Sign-in failed. Please try again.", "error")
+        return
+      }
+
+      if (result.hasResult && result.user) {
+        const validation = await authService.validateAdminAccess(result.user)
+        if (validation.isAdmin) {
+          setIsAdmin(true)
+          setView('dash')
+          showToast("Welcome back, Admin!")
+        } else {
+          showToast(validation.error, "error")
+        }
+        setLoading(false)
       }
     }
-    handleRedirectResult()
+    handleRedirect()
   }, [])
 
   const signOutAdmin = async () => {
-    try {
-      await signOut(auth)
+    const result = await authService.signOut()
+    if (result.success) {
       setIsAdmin(false)
       setView('home')
       showToast("Signed out successfully")
-      await signInAnonymously(auth)
-    } catch (e) {
+    } else {
       showToast("Sign-out failed", "error")
     }
   }
 
   useEffect(() => {
-    return onAuthStateChanged(auth, u => {
-      setUser(u)
-      setIsAdmin(checkAdmin(u))
+    return authService.onAuthStateChanged((user, isAdminStatus) => {
+      setUser(user)
+      setIsAdmin(isAdminStatus)
       setLoading(false)
-      if (!u) signInAnonymously(auth)
     })
   }, [])
 
@@ -802,12 +799,12 @@ export default function App() {
       <AnimatePresence mode="wait">
         {view === 'home' && (
           <motion.div key="home" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HomeView {...{ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, signInWithGoogle }} />
+            <HomeView {...{ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, handleSignInWithGoogle }} />
           </motion.div>
         )}
         {view === 'dash' && (
           <motion.div key="dash" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <DashboardView {...{ user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />
+            <DashboardView {...{ user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />
           </motion.div>
         )}
         {view === 'edit' && (
@@ -844,7 +841,7 @@ export default function App() {
 
 // ============ VIEW COMPONENTS ============
 
-function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, signInWithGoogle }) {
+function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView, handleSignInWithGoogle }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -896,7 +893,7 @@ function HomeView({ joinForm, setJoinForm, handleJoin, loading, isAdmin, setView
 
         <div className="pt-8 border-t border-slate-800">
           <button
-            onClick={() => isAdmin ? setView('dash') : signInWithGoogle()}
+            onClick={() => isAdmin ? setView('dash') : handleSignInWithGoogle()}
             disabled={loading}
             className="text-slate-500 hover:text-blue-400 transition-colors text-sm flex items-center justify-center gap-2 mx-auto"
           >
@@ -917,7 +914,7 @@ const categoryConfig = {
 }
 
 function DashboardView(props) {
-  const { user, isAdmin, signInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
+  const { user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
 
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [courseFilter, setCourseFilter] = useState('all')
@@ -985,7 +982,7 @@ function DashboardView(props) {
           </div>
           <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
           <p className="text-slate-400 mb-6">You need to sign in with an authorized Google account to access the dashboard.</p>
-          <button onClick={signInWithGoogle} className="btn-gradient px-8 py-3 rounded-xl font-bold w-full mb-3">
+          <button onClick={handleSignInWithGoogle} className="btn-gradient px-8 py-3 rounded-xl font-bold w-full mb-3">
             <i className="fab fa-google mr-2"></i>Sign in with Google
           </button>
           <button onClick={() => setView('home')} className="text-slate-500 hover:text-white transition-colors">
