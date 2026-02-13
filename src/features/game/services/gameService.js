@@ -6,7 +6,7 @@
  * Complex scoring logic remains in App.jsx and can be extracted to utils in future phases.
  */
 
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
 
@@ -62,10 +62,11 @@ export async function startQuestionTimer(pin) {
 
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
-      // Set questionStartTime to now + small buffer for network propagation
+      // Use Firestore serverTimestamp() to get a consistent server-side time
+      // This prevents clock skew issues between host and student computers
       await updateDoc(sessionRef, {
         status: 'question',
-        questionStartTime: Date.now() + 500  // 500ms buffer for network/render time
+        questionStartTime: serverTimestamp()  // Server-side timestamp, same for all clients
       })
     }
 

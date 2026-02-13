@@ -13,7 +13,9 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
     if (!isRunning || !startTime) return
 
     const updateTimer = () => {
-      const elapsed = (Date.now() - startTime) / 1000
+      // Handle both Firestore Timestamp objects and regular numbers
+      const startTimeMs = startTime?.toMillis ? startTime.toMillis() : startTime
+      const elapsed = (Date.now() - startTimeMs) / 1000
       const remaining = Math.max(0, duration - elapsed)
       setTimeLeft(remaining)
 

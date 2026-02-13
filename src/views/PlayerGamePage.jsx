@@ -237,7 +237,9 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
             onClick={() => {
               if (!canSubmit) return
               haptic.light()
-              const answerTime = Date.now() - questionStartTime
+              // Handle both Firestore Timestamp objects and regular numbers
+              const startTimeMs = questionStartTime?.toMillis ? questionStartTime.toMillis() : questionStartTime
+              const answerTime = Date.now() - startTimeMs
               submitAnswer(idx, answerTime)
             }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}

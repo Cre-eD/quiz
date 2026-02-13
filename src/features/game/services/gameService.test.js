@@ -5,12 +5,14 @@ const {
   mockDoc,
   mockGetDoc,
   mockUpdateDoc,
+  mockServerTimestamp,
   mockDb
 } = vi.hoisted(() => {
   return {
     mockDoc: vi.fn(),
     mockGetDoc: vi.fn(),
     mockUpdateDoc: vi.fn(),
+    mockServerTimestamp: vi.fn(() => Date.now()),  // Return current timestamp
     mockDb: {}
   }
 })
@@ -18,7 +20,8 @@ const {
 vi.mock('firebase/firestore', () => ({
   doc: (...args) => mockDoc(...args),
   getDoc: (...args) => mockGetDoc(...args),
-  updateDoc: (...args) => mockUpdateDoc(...args)
+  updateDoc: (...args) => mockUpdateDoc(...args),
+  serverTimestamp: (...args) => mockServerTimestamp(...args)
 }))
 
 vi.mock('@/lib/firebase/config', () => ({
