@@ -117,7 +117,7 @@ describe('gameService', () => {
         expect.anything(),
         {
           status: 'question',
-          questionStartTime: countdownEnd
+          questionStartTime: expect.any(Number)
         }
       )
     })

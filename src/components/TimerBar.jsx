@@ -17,9 +17,10 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
       const remaining = Math.max(0, duration - elapsed)
       setTimeLeft(remaining)
 
+      // Timer expired - call completion callback
       if (remaining <= 0 && !completedRef.current) {
         completedRef.current = true
-        onComplete?.()
+        if (onComplete) onComplete()
       }
     }
 

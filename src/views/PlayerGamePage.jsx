@@ -38,26 +38,15 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     }
   }, [gamePhase, session?.countdownEnd])
 
-  // Button disable logic - give small buffer before actual deadline
+  // Button disable logic - sync with TimerBar
   useEffect(() => {
     if (gamePhase !== 'question' || !questionStartTime) {
-      setCanSubmit(true) // Reset when not in question phase
+      setCanSubmit(true)
       return
     }
 
-    setCanSubmit(true) // Reset when question phase starts
-
-    // 25 second question duration, disable submit at 24.5 seconds (500ms buffer)
-    const questionEndTime = questionStartTime + (25 * 1000)
-    const clientDeadline = questionEndTime - 500
-
-    const checkDeadline = setInterval(() => {
-      if (Date.now() >= clientDeadline && !answered) {
-        setCanSubmit(false)
-      }
-    }, 100)
-
-    return () => clearInterval(checkDeadline)
+    // Allow submissions until timer fully expires
+    setCanSubmit(true)
   }, [gamePhase, questionStartTime, answered])
 
 
@@ -100,7 +89,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
   if (gamePhase === 'results') {
     const myAnswer = session?.answers?.[user?.uid]
-    const wasCorrect = myAnswer?.correct
+    const wasCorrect = myAnswer?.answerIndex === question?.correct
     const multiplier = getMultiplier(myStreak)
 
     return (

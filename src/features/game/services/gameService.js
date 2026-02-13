@@ -9,7 +9,6 @@
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
-import { checkReactionSendLimit } from '@/shared/utils/rateLimit'
 
 /**
  * Start a game session (transition to countdown phase)
@@ -63,10 +62,10 @@ export async function startQuestionTimer(pin) {
 
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
-      // Use countdownEnd as questionStartTime to avoid latency issues
+      // Set questionStartTime to now + small buffer for network propagation
       await updateDoc(sessionRef, {
         status: 'question',
-        questionStartTime: sessionData.countdownEnd
+        questionStartTime: Date.now() + 500  // 500ms buffer for network/render time
       })
     }
 
@@ -201,16 +200,7 @@ export async function sendReaction({
       return { success: false, error: 'PIN, emoji, and playerName are required' }
     }
 
-    // Rate limit check (10 reactions per minute per user)
-    if (userId) {
-      const rateLimit = checkReactionSendLimit(userId)
-      if (!rateLimit.allowed) {
-        return {
-          success: false,
-          error: `Too many reactions. Please wait ${rateLimit.resetIn} seconds.`
-        }
-      }
-    }
+    // Rate limit removed - per-question limit (5) handled in frontend is sufficient
 
     const reaction = {
       id: Date.now() + secureRandom(),
