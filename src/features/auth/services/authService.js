@@ -146,21 +146,11 @@ export async function signOut() {
 
 /**
  * Subscribe to authentication state changes
- * @param {Function} callback - Called with (user, isAdmin) when auth state changes
+ * @param {Function} callback - Called with (user) when auth state changes
  * @returns {Function} - Unsubscribe function
  */
 export function onAuthStateChanged(callback) {
-  return firebaseOnAuthStateChanged(auth, (user) => {
-    const adminStatus = isAdmin(user)
-    callback(user, adminStatus)
-
-    // Auto sign-in anonymously if no user
-    if (!user) {
-      firebaseSignInAnonymously(auth).catch((error) => {
-        console.error('Auto anonymous sign-in failed:', error)
-      })
-    }
-  })
+  return firebaseOnAuthStateChanged(auth, callback)
 }
 
 /**

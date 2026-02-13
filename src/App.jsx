@@ -362,6 +362,16 @@ export default function App() {
     }
   }
 
+  const cancelSession = async () => {
+    const result = await sessionService.deleteSession(session.pin)
+    if (result.success) {
+      setSession(null)
+      setView('dash')
+    } else {
+      showToast(result.error || "Failed to cancel session", "error")
+    }
+  }
+
   const endGame = async () => {
     if (session?.leaderboardId && session?.players && session?.scores) {
       await saveToLeaderboard(session.leaderboardId, session.players, session.scores)
@@ -559,7 +569,7 @@ export default function App() {
         )}
         {view === 'host' && (
           <motion.div key="host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HostLobbyPage {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, db, deleteDoc, doc }} />
+            <HostLobbyPage {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, cancelSession }} />
           </motion.div>
         )}
         {view === 'play-host' && (

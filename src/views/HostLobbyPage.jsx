@@ -1,4 +1,4 @@
-export default function HostLobbyPage({ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, db, deleteDoc, doc }) {
+export default function HostLobbyPage({ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, cancelSession }) {
   if (!user?.email || !isAdmin) { setView('home'); return null }
 
   return (
@@ -57,7 +57,7 @@ export default function HostLobbyPage({ user, isAdmin, setView, session, startGa
         {/* Control bar */}
         <div className="flex items-center gap-6">
           <button
-            onClick={() => {setView('dash'); deleteDoc(doc(db, 'sessions', session.pin));}}
+            onClick={cancelSession}
             className="glass px-6 py-3 rounded-xl text-slate-400 hover:text-red-400 hover:border-red-500/50 transition-all flex items-center gap-2"
           >
             <i className="fa fa-times"></i>

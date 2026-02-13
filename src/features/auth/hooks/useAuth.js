@@ -65,12 +65,33 @@ export function useAuth() {
 
   // Listen to auth state changes
   useEffect(() => {
+    let mounted = true
+
     const unsubscribe = authService.onAuthStateChanged((firebaseUser) => {
+      if (!mounted) return
       setUser(firebaseUser)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    // Immediately check if we have a user, if not sign in anonymously
+    const initAuth = async () => {
+      const currentUser = authService.getCurrentUser()
+      if (!currentUser) {
+        try {
+          await authService.signInAnonymously()
+        } catch (error) {
+          console.error('Initial anonymous sign-in failed:', error)
+          if (mounted) setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
+
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
   }, [])
 
   return {

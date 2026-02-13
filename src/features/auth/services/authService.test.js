@@ -304,7 +304,7 @@ describe('authService', () => {
   })
 
   describe('onAuthStateChanged', () => {
-    it('should call callback with user and admin status', () => {
+    it('should call callback with user', () => {
       const mockUser = { uid: 'user-123', email: 'admin@test.com' }
       const callback = vi.fn()
       const unsubscribe = vi.fn()
@@ -316,53 +316,36 @@ describe('authService', () => {
 
       const result = onAuthStateChanged(callback)
 
-      expect(callback).toHaveBeenCalledWith(mockUser, true)
+      expect(callback).toHaveBeenCalledWith(mockUser)
       expect(result).toBe(unsubscribe)
     })
 
-    it('should call callback with non-admin user', () => {
-      const mockUser = { uid: 'user-123', email: 'user@example.com' }
+    it('should call callback with null when no user', () => {
       const callback = vi.fn()
-
-      mockOnAuthStateChanged.mockImplementation((auth, cb) => {
-        cb(mockUser)
-        return vi.fn()
-      })
-
-      onAuthStateChanged(callback)
-
-      expect(callback).toHaveBeenCalledWith(mockUser, false)
-    })
-
-    it('should auto sign-in anonymously if no user', () => {
-      const callback = vi.fn()
-      mockSignInAnonymously.mockResolvedValue()
+      const unsubscribe = vi.fn()
 
       mockOnAuthStateChanged.mockImplementation((auth, cb) => {
         cb(null)
-        return vi.fn()
+        return unsubscribe
       })
 
-      onAuthStateChanged(callback)
+      const result = onAuthStateChanged(callback)
 
-      expect(callback).toHaveBeenCalledWith(null, false)
-      expect(mockSignInAnonymously).toHaveBeenCalledWith(mockAuth)
+      expect(callback).toHaveBeenCalledWith(null)
+      expect(result).toBe(unsubscribe)
     })
 
-    it('should handle auto sign-in error gracefully', () => {
+    it('should return unsubscribe function', () => {
       const callback = vi.fn()
-      const error = new Error('Auto sign-in failed')
-      mockSignInAnonymously.mockRejectedValue(error)
+      const unsubscribe = vi.fn()
 
       mockOnAuthStateChanged.mockImplementation((auth, cb) => {
-        cb(null)
-        return vi.fn()
+        return unsubscribe
       })
 
-      onAuthStateChanged(callback)
+      const result = onAuthStateChanged(callback)
 
-      // Should not throw, just log error
-      expect(callback).toHaveBeenCalledWith(null, false)
+      expect(result).toBe(unsubscribe)
     })
   })
 
