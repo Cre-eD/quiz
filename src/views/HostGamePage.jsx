@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import { optionColors } from '@/constants'
-import { getCountdownRemaining, syncClockOffset } from '@/shared/utils/timeSync'
 
 export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }) {
   // ALL HOOKS MUST BE AT THE TOP - React requires this!
@@ -47,20 +46,18 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
 
   // Countdown timer effect
   useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownStartTime) {
-      // Sync clock offset with server
-      syncClockOffset(session.countdownStartTime)
-
-      const duration = session.countdownDuration || 3
-
-      const interval = setInterval(() => {
-        const remaining = getCountdownRemaining(session.countdownStartTime, duration)
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      const updateCountdown = () => {
+        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
         setCountdown(Math.max(0, remaining))
-        if (remaining <= 0) clearInterval(interval)
-      }, 100)
+      }
+
+      updateCountdown()
+
+      const interval = setInterval(updateCountdown, 100)
       return () => clearInterval(interval)
     }
-  }, [gamePhase, session?.countdownStartTime, session?.countdownDuration])
+  }, [gamePhase, session?.countdownEnd])
 
   // Derived values (can be after hooks, before conditionals)
   const question = session?.quiz?.questions?.[currentQuestion]

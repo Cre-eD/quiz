@@ -4,7 +4,6 @@ import TimerBar from '@/components/TimerBar'
 import MyBadges from '@/features/game/components/MyBadges'
 import { optionColors } from '@/constants'
 import { haptic } from '@/utils/haptic'
-import { getCountdownRemaining, syncClockOffset, convertServerTime, getServerTime } from '@/shared/utils/timeSync'
 
 export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
   const [countdown, setCountdown] = useState(3)
@@ -23,28 +22,23 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
   // Countdown timer for countdown phase
   useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownStartTime) {
-      // Sync clock offset with server
-      syncClockOffset(session.countdownStartTime)
-
-      const duration = session.countdownDuration || 3
-
-      // Immediately set countdown to correct value
-      const remaining = getCountdownRemaining(session.countdownStartTime, duration)
-      setCountdown(Math.max(0, remaining))
-
-      const interval = setInterval(() => {
-        const remaining = getCountdownRemaining(session.countdownStartTime, duration)
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      const updateCountdown = () => {
+        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
         setCountdown(Math.max(0, remaining))
-        if (remaining <= 0) clearInterval(interval)
-      }, 100)
+      }
+
+      // Update immediately
+      updateCountdown()
+
+      const interval = setInterval(updateCountdown, 100)
       return () => clearInterval(interval)
     } else {
       setCountdown(3) // Reset to default when not in countdown
     }
-  }, [gamePhase, session?.countdownStartTime, session?.countdownDuration])
+  }, [gamePhase, session?.countdownEnd])
 
-  // Button disable logic - disable 1 second before deadline
+  // Button disable logic - give 2 second buffer before actual deadline
   useEffect(() => {
     if (gamePhase !== 'question' || !questionStartTime) {
       setCanSubmit(true) // Reset when not in question phase
@@ -53,24 +47,12 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
     setCanSubmit(true) // Reset when question phase starts
 
-    // Convert server timestamp to milliseconds
-    const questionStartMs = convertServerTime(questionStartTime)
-    const questionEndTime = questionStartMs + (25 * 1000)
-    const clientDeadline = questionEndTime - 1000  // 1 second before server deadline
-    const now = Date.now()
-
-    console.log('[PlayerGamePage] Question timer check:', {
-      questionStartTime,
-      questionEndTime,
-      clientDeadline,
-      now,
-      timeUntilDeadline: (clientDeadline - now) / 1000,
-      gamePhase
-    })
+    // 25 second question duration, disable submit at 23 seconds (2 second buffer)
+    const questionEndTime = questionStartTime + (25 * 1000)
+    const clientDeadline = questionEndTime - 2000
 
     const checkDeadline = setInterval(() => {
-      if (getServerTime() >= clientDeadline && !answered) {
-        console.log('[PlayerGamePage] Time is up! Disabling submit')
+      if (Date.now() >= clientDeadline && !answered) {
         setCanSubmit(false)
       }
     }, 100)
@@ -162,49 +144,37 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     )
   }
 
-  // Countdown phase - show question but disable buttons
+  // Countdown phase - sleek loading state
   if (gamePhase === 'countdown') {
+    const progress = countdown > 0 ? ((3 - countdown) / 3) * 100 : 100
+
     return (
-      <div className="min-h-screen flex flex-col p-4">
-        <div className="text-center mb-6">
-          <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
-          <h2 className="text-2xl font-bold">{question?.text}</h2>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full">
+          {/* Question preview */}
+          <div className="mb-8">
+            <p className="text-slate-500 text-sm mb-3">Question {currentQuestion + 1}</p>
+            <h2 className="text-xl font-semibold text-slate-300 mb-6">{question?.text}</h2>
+          </div>
 
-        {/* Answer options visible but disabled with countdown overlay */}
-        <div className="flex-grow grid grid-cols-2 gap-3 relative">
-          {question?.options.map((opt, idx) => (
-            <div key={idx} className="relative">
-              <button
-                disabled
-                className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 w-full h-full opacity-50 cursor-not-allowed`}
-              >
-                <i className={`fa ${optionColors[idx].icon} text-3xl mb-2 opacity-75`}></i>
-                <span className="text-lg font-semibold text-center">{opt}</span>
-              </button>
-            </div>
-          ))}
-
-          {/* Centered countdown overlay */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-slate-900/95 px-12 py-8 rounded-3xl border-2 border-blue-500/50 shadow-2xl">
-              {countdown > 0 ? (
-                <>
-                  <div className="text-8xl font-black gradient-text animate-pulse mb-2">
-                    {countdown}
-                  </div>
-                  <p className="text-slate-400 text-lg text-center">Get ready...</p>
-                </>
-              ) : (
-                <>
-                  <div className="text-5xl font-black gradient-text animate-pulse mb-2">
-                    <i className="fa fa-circle-notch fa-spin"></i>
-                  </div>
-                  <p className="text-slate-400 text-lg text-center">Starting soon...</p>
-                </>
-              )}
+          {/* Animated ready indicator */}
+          <div className="relative mb-6">
+            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center animate-pulse">
+              <i className="fa fa-bolt text-4xl"></i>
             </div>
           </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+
+          <p className="text-slate-400 text-lg">
+            {countdown > 0 ? 'Get ready...' : 'Starting...'}
+          </p>
         </div>
       </div>
     )
@@ -278,7 +248,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
             onClick={() => {
               if (!canSubmit) return
               haptic.light()
-              const answerTime = getServerTime() - convertServerTime(questionStartTime)
+              const answerTime = Date.now() - questionStartTime
               submitAnswer(idx, answerTime)
             }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}

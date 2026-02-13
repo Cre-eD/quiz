@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { getElapsedSeconds, convertServerTime, syncClockOffset } from '@/shared/utils/timeSync'
 
 export default function TimerBar({ duration, onComplete, isRunning, startTime }) {
   const [timeLeft, setTimeLeft] = useState(duration)
@@ -10,18 +9,11 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
     setTimeLeft(duration)
   }, [duration, startTime])
 
-  // Sync clock offset when we receive a server timestamp
-  useEffect(() => {
-    if (startTime) {
-      syncClockOffset(startTime)
-    }
-  }, [startTime])
-
   useEffect(() => {
     if (!isRunning || !startTime) return
 
     const updateTimer = () => {
-      const elapsed = getElapsedSeconds(startTime)
+      const elapsed = (Date.now() - startTime) / 1000
       const remaining = Math.max(0, duration - elapsed)
       setTimeLeft(remaining)
 
