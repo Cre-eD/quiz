@@ -17,7 +17,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
   // Use session's questionStartTime for accurate speed tracking (null during countdown)
-  const questionStartTime = session?.questionStartTime
+  // Use fallback if serverTimestamp hasn't resolved yet
+  const questionStartTime = session?.questionStartTime || session?.questionStartTimeFallback
   const myScore = scores?.[user?.uid] || 0
 
   // Countdown timer for countdown phase

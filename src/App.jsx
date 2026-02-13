@@ -419,11 +419,16 @@ export default function App() {
     if (answered) return
 
     // Grace period check - allow 3 seconds after timer ends
-    const questionEndTime = session.questionStartTime + (25 * 1000)  // 25 seconds
+    // Use fallback if serverTimestamp hasn't resolved yet, and handle Firestore Timestamp objects
+    const startTimeRaw = session.questionStartTime || session.questionStartTimeFallback
+    const startTimeMs = startTimeRaw?.toMillis
+      ? startTimeRaw.toMillis()
+      : startTimeRaw
+    const questionEndTime = startTimeMs + (25 * 1000)  // 25 seconds
     const GRACE_PERIOD = 3000  // 3 seconds grace
     const now = Date.now()
 
-    if (now > questionEndTime + GRACE_PERIOD) {
+    if (startTimeMs && now > questionEndTime + GRACE_PERIOD) {
       showToast("Time's up! Answer not counted.", "error")
       setAnswered(true)
       return

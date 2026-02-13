@@ -120,7 +120,8 @@ describe('gameService', () => {
         expect.anything(),
         {
           status: 'question',
-          questionStartTime: expect.any(Number)
+          questionStartTime: expect.any(Number),
+          questionStartTimeFallback: expect.any(Number)
         }
       )
     })

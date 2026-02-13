@@ -62,11 +62,12 @@ export async function startQuestionTimer(pin) {
 
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
-      // Use Firestore serverTimestamp() to get a consistent server-side time
-      // This prevents clock skew issues between host and student computers
+      // Use server timestamp for accurate sync across all clients
+      // Also provide fallback timestamp for immediate availability
       await updateDoc(sessionRef, {
         status: 'question',
-        questionStartTime: serverTimestamp()  // Server-side timestamp, same for all clients
+        questionStartTime: serverTimestamp(),
+        questionStartTimeFallback: sessionData.countdownEnd  // Immediate fallback value
       })
     }
 
