@@ -60,7 +60,34 @@ npx playwright test smoke.spec.js
 
 **Location:** `e2e/smoke.spec.js`
 
-### 3. E2E Tests (Slow, Automated)
+### 3. Workflow Tests (Medium, Semi-Automated)
+
+**What it tests:** Complete user workflows from sign-in to quiz completion
+
+**Run:**
+```bash
+# Terminal 1: Start preview server
+npm run preview
+
+# Terminal 2: Run workflow test (watch browser)
+npm run test:workflow
+```
+
+**What it validates:**
+- ✅ Admin can sign in
+- ✅ Dashboard loads with quizzes
+- ✅ Can launch a quiz session
+- ✅ Player can join with PIN
+- ✅ Host sees player join
+- ✅ Game starts successfully
+- ✅ Player sees questions
+- ✅ No errors throughout workflow
+
+**Important:** Requires Google OAuth - you may need to sign in manually during the test.
+
+**Location:** `e2e/workflow.spec.js`
+
+### 4. E2E Tests (Slow, Automated)
 
 **What it tests:** Full user workflows end-to-end
 
@@ -74,7 +101,7 @@ npm run test:e2e:debug     # Debug mode
 
 **Location:** `e2e/tests/`
 
-### 4. Manual Testing (Slow, Manual)
+### 5. Manual Testing (Slow, Manual)
 
 **What it tests:** Real user experience, edge cases, visual polish
 

@@ -19,6 +19,8 @@
     "test:all": "vitest run && npx playwright test",
     "test:local": "bash scripts/test-local.sh",
     "test:smoke": "npx playwright test smoke.spec.js",
+    "test:workflow": "npx playwright test workflow.spec.js --headed",
+    "test:workflow:headed": "npx playwright test workflow.spec.js --headed --debug",
     "validate": "bash scripts/validate-build.sh",
     "deploy": "npm run build && firebase deploy",
     "deploy:prod": "bash scripts/deploy-prod.sh",
