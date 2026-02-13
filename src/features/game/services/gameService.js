@@ -6,7 +6,7 @@
  * Complex scoring logic remains in App.jsx and can be extracted to utils in future phases.
  */
 
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
 import { checkReactionSendLimit } from '@/shared/utils/rateLimit'
@@ -26,7 +26,8 @@ export async function startGame(pin) {
       status: 'countdown',
       currentQuestion: 0,
       answers: {},
-      countdownEnd: Date.now() + 3000,
+      countdownStartTime: serverTimestamp(),
+      countdownDuration: 3,
       questionStartTime: null,
       reactions: []
     })
@@ -64,7 +65,7 @@ export async function startQuestionTimer(pin) {
     if (sessionData.status === 'countdown') {
       await updateDoc(sessionRef, {
         status: 'question',
-        questionStartTime: Date.now()
+        questionStartTime: serverTimestamp()
       })
     }
 
@@ -159,7 +160,8 @@ export async function nextQuestion({
       status: 'countdown',
       currentQuestion: nextQ,
       answers: {},
-      countdownEnd: Date.now() + 3000,
+      countdownStartTime: serverTimestamp(),
+      countdownDuration: 3,
       questionStartTime: null,
       reactions: [],
       streaks: newStreaks,

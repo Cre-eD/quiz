@@ -5,12 +5,14 @@ const {
   mockDoc,
   mockGetDoc,
   mockUpdateDoc,
+  mockServerTimestamp,
   mockDb
 } = vi.hoisted(() => {
   return {
     mockDoc: vi.fn(),
     mockGetDoc: vi.fn(),
     mockUpdateDoc: vi.fn(),
+    mockServerTimestamp: vi.fn(() => Date.now()),
     mockDb: {}
   }
 })
@@ -18,7 +20,8 @@ const {
 vi.mock('firebase/firestore', () => ({
   doc: (...args) => mockDoc(...args),
   getDoc: (...args) => mockGetDoc(...args),
-  updateDoc: (...args) => mockUpdateDoc(...args)
+  updateDoc: (...args) => mockUpdateDoc(...args),
+  serverTimestamp: () => mockServerTimestamp()
 }))
 
 vi.mock('@/lib/firebase/config', () => ({
@@ -59,7 +62,8 @@ describe('gameService', () => {
           status: 'countdown',
           currentQuestion: 0,
           answers: {},
-          countdownEnd: expect.any(Number),
+          countdownStartTime: expect.any(Number),
+          countdownDuration: 3,
           questionStartTime: null,
           reactions: []
         })
@@ -218,7 +222,8 @@ describe('gameService', () => {
           status: 'countdown',
           currentQuestion: 1,
           answers: {},
-          countdownEnd: expect.any(Number),
+          countdownStartTime: expect.any(Number),
+          countdownDuration: 3,
           questionStartTime: null,
           reactions: []
         })

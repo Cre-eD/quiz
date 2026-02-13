@@ -4,6 +4,7 @@ import TimerBar from '@/components/TimerBar'
 import MyBadges from '@/features/game/components/MyBadges'
 import { optionColors } from '@/constants'
 import { haptic } from '@/utils/haptic'
+import { getCountdownRemaining, syncClockOffset, convertServerTime, getServerTime } from '@/shared/utils/timeSync'
 
 export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
   const [countdown, setCountdown] = useState(3)
@@ -22,13 +23,18 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
   // Countdown timer for countdown phase
   useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
+    if (gamePhase === 'countdown' && session?.countdownStartTime) {
+      // Sync clock offset with server
+      syncClockOffset(session.countdownStartTime)
+
+      const duration = session.countdownDuration || 3
+
       // Immediately set countdown to correct value
-      const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+      const remaining = getCountdownRemaining(session.countdownStartTime, duration)
       setCountdown(Math.max(0, remaining))
 
       const interval = setInterval(() => {
-        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        const remaining = getCountdownRemaining(session.countdownStartTime, duration)
         setCountdown(Math.max(0, remaining))
         if (remaining <= 0) clearInterval(interval)
       }, 100)
@@ -36,7 +42,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     } else {
       setCountdown(3) // Reset to default when not in countdown
     }
-  }, [gamePhase, session?.countdownEnd])
+  }, [gamePhase, session?.countdownStartTime, session?.countdownDuration])
 
   // Button disable logic - disable 1 second before deadline
   useEffect(() => {
@@ -47,7 +53,9 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
     setCanSubmit(true) // Reset when question phase starts
 
-    const questionEndTime = questionStartTime + (25 * 1000)
+    // Convert server timestamp to milliseconds
+    const questionStartMs = convertServerTime(questionStartTime)
+    const questionEndTime = questionStartMs + (25 * 1000)
     const clientDeadline = questionEndTime - 1000  // 1 second before server deadline
     const now = Date.now()
 
@@ -61,7 +69,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     })
 
     const checkDeadline = setInterval(() => {
-      if (Date.now() >= clientDeadline && !answered) {
+      if (getServerTime() >= clientDeadline && !answered) {
         console.log('[PlayerGamePage] Time is up! Disabling submit')
         setCanSubmit(false)
       }
@@ -270,7 +278,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
             onClick={() => {
               if (!canSubmit) return
               haptic.light()
-              const answerTime = Date.now() - questionStartTime
+              const answerTime = getServerTime() - convertServerTime(questionStartTime)
               submitAnswer(idx, answerTime)
             }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}
