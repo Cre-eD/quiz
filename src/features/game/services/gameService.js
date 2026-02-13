@@ -63,9 +63,10 @@ export async function startQuestionTimer(pin) {
 
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
+      // Use countdownEnd as questionStartTime to avoid latency issues
       await updateDoc(sessionRef, {
         status: 'question',
-        questionStartTime: Date.now()
+        questionStartTime: sessionData.countdownEnd
       })
     }
 

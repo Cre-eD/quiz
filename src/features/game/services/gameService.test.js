@@ -103,9 +103,10 @@ describe('gameService', () => {
 
   describe('startQuestionTimer', () => {
     it('should start question timer successfully from countdown', async () => {
+      const countdownEnd = Date.now() + 3000
       mockGetDoc.mockResolvedValue({
         exists: () => true,
-        data: () => ({ status: 'countdown' })
+        data: () => ({ status: 'countdown', countdownEnd })
       })
       mockUpdateDoc.mockResolvedValue()
 
@@ -116,7 +117,7 @@ describe('gameService', () => {
         expect.anything(),
         {
           status: 'question',
-          questionStartTime: expect.any(Number)
+          questionStartTime: countdownEnd
         }
       )
     })
