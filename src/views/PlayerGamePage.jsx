@@ -169,10 +169,21 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
           {/* Centered countdown overlay */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="bg-slate-900/95 px-12 py-8 rounded-3xl border-2 border-blue-500/50 shadow-2xl">
-              <div className="text-8xl font-black gradient-text animate-pulse mb-2">
-                {countdown}
-              </div>
-              <p className="text-slate-400 text-lg text-center">Get ready...</p>
+              {countdown > 0 ? (
+                <>
+                  <div className="text-8xl font-black gradient-text animate-pulse mb-2">
+                    {countdown}
+                  </div>
+                  <p className="text-slate-400 text-lg text-center">Get ready...</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl font-black gradient-text animate-pulse mb-2">
+                    <i className="fa fa-circle-notch fa-spin"></i>
+                  </div>
+                  <p className="text-slate-400 text-lg text-center">Starting soon...</p>
+                </>
+              )}
             </div>
           </div>
         </div>
