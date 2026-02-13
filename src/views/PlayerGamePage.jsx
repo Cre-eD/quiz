@@ -49,9 +49,20 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
     const questionEndTime = questionStartTime + (25 * 1000)
     const clientDeadline = questionEndTime - 1000  // 1 second before server deadline
+    const now = Date.now()
+
+    console.log('[PlayerGamePage] Question timer check:', {
+      questionStartTime,
+      questionEndTime,
+      clientDeadline,
+      now,
+      timeUntilDeadline: (clientDeadline - now) / 1000,
+      gamePhase
+    })
 
     const checkDeadline = setInterval(() => {
       if (Date.now() >= clientDeadline && !answered) {
+        console.log('[PlayerGamePage] Time is up! Disabling submit')
         setCanSubmit(false)
       }
     }, 100)
