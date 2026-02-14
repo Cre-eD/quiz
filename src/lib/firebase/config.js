@@ -21,8 +21,9 @@ export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
 
-// Connect to Firebase emulators in development/test mode
-if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+// Connect to Firebase emulators ONLY in development mode
+// import.meta.env.DEV ensures this code is completely removed in production builds
+if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   console.log('🔧 Connecting to Firebase emulators...')
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, 'localhost', 8080)
