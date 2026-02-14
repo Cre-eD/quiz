@@ -383,6 +383,42 @@ export default function App() {
     }
   }
 
+  const leavePlayerSession = async () => {
+    const pin = session?.pin
+    const userId = user?.uid
+    let leftRemotely = true
+
+    if (pin && userId) {
+      const result = await sessionService.leaveSession({ pin, userId })
+      if (!result.success) {
+        leftRemotely = false
+      }
+    }
+
+    // Always recover UI locally, even if Firestore update fails
+    localStorage.removeItem('quizSession')
+    setSession(null)
+    setJoinForm({ pin: '', name: '' })
+    setScores({})
+    setStreaks({})
+    setColdStreaks({})
+    setBadges({})
+    setReactions([])
+    setAnswered(false)
+    setPlayerAnswer(null)
+    setMyReactionCount(0)
+    setCurrentQuestion(0)
+    setGamePhase('lobby')
+    prevGamePhaseRef.current = 'lobby'
+    setView('home')
+
+    if (leftRemotely) {
+      showToast('You left the session', 'info')
+    } else {
+      showToast("You left locally, but couldn't update the session", 'error')
+    }
+  }
+
   const abortGame = async () => {
     if (!confirm('Are you sure you want to stop the quiz? All players will be disconnected.')) {
       return
@@ -613,12 +649,12 @@ export default function App() {
         )}
         {view === 'wait' && (
           <motion.div key="wait" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <PlayerWaitPage joinForm={joinForm} />
+            <PlayerWaitPage joinForm={joinForm} onLeaveSession={leavePlayerSession} />
           </motion.div>
         )}
         {view === 'play-player' && (
           <motion.div key="play-player" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <PlayerGamePage {...{ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }} />
+            <PlayerGamePage {...{ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession: leavePlayerSession }} />
           </motion.div>
         )}
       </AnimatePresence>

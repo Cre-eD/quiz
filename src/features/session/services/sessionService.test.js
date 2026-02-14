@@ -7,6 +7,7 @@ const {
   mockSetDoc,
   mockUpdateDoc,
   mockDeleteDoc,
+  mockDeleteField,
   mockOnSnapshot,
   mockDb
 } = vi.hoisted(() => {
@@ -16,6 +17,7 @@ const {
     mockSetDoc: vi.fn(),
     mockUpdateDoc: vi.fn(),
     mockDeleteDoc: vi.fn(),
+    mockDeleteField: vi.fn(),
     mockOnSnapshot: vi.fn(),
     mockDb: {}
   }
@@ -28,6 +30,7 @@ vi.mock('firebase/firestore', () => ({
   setDoc: (...args) => mockSetDoc(...args),
   updateDoc: (...args) => mockUpdateDoc(...args),
   deleteDoc: (...args) => mockDeleteDoc(...args),
+  deleteField: (...args) => mockDeleteField(...args),
   onSnapshot: (...args) => mockOnSnapshot(...args)
 }))
 
@@ -72,6 +75,7 @@ import {
   kickPlayer,
   toggleLateJoin,
   deleteSession,
+  leaveSession,
   subscribeToSession,
   updateSession
 } from './sessionService'
@@ -84,6 +88,7 @@ describe('sessionService', () => {
     localStorage.clear()
     rateLimiter.clearAll() // Reset rate limits before each test
     mockDoc.mockReturnValue({ id: 'mock-doc-ref' })
+    mockDeleteField.mockReturnValue('__DELETE_FIELD__')
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -551,6 +556,63 @@ describe('sessionService', () => {
       expect(result.success).toBe(true)
       expect(console.warn).toHaveBeenCalled()
       getItemSpy.mockRestore()
+    })
+  })
+
+  describe('leaveSession', () => {
+    it('should remove player data successfully', async () => {
+      mockUpdateDoc.mockResolvedValue()
+
+      const result = await leaveSession({ pin: '1234', userId: 'user-1' })
+
+      expect(result.success).toBe(true)
+      expect(mockUpdateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          'players.user-1': '__DELETE_FIELD__',
+          'scores.user-1': '__DELETE_FIELD__',
+          'streaks.user-1': '__DELETE_FIELD__',
+          'coldStreaks.user-1': '__DELETE_FIELD__',
+          'badges.user-1': '__DELETE_FIELD__',
+          'correctCounts.user-1': '__DELETE_FIELD__',
+          'answers.user-1': '__DELETE_FIELD__'
+        })
+      )
+    })
+
+    it('should clear localStorage if PIN matches', async () => {
+      localStorage.setItem('quizSession', JSON.stringify({ pin: '1234', name: 'Alice' }))
+      mockUpdateDoc.mockResolvedValue()
+
+      await leaveSession({ pin: '1234', userId: 'user-1' })
+
+      expect(localStorage.getItem('quizSession')).toBeNull()
+    })
+
+    it('should reject missing PIN', async () => {
+      const result = await leaveSession({ pin: '', userId: 'user-1' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('required')
+      expect(mockUpdateDoc).not.toHaveBeenCalled()
+    })
+
+    it('should reject missing userId', async () => {
+      const result = await leaveSession({ pin: '1234', userId: '' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('required')
+      expect(mockUpdateDoc).not.toHaveBeenCalled()
+    })
+
+    it('should handle Firestore error', async () => {
+      mockUpdateDoc.mockRejectedValue(new Error('Update failed'))
+
+      const result = await leaveSession({ pin: '1234', userId: 'user-1' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Update failed')
+      expect(console.error).toHaveBeenCalled()
     })
   })
 

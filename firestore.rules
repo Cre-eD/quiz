@@ -63,6 +63,26 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['players', 'scores'])
         && (resource.data.status == 'lobby' || (resource.data.status == 'active' && resource.data.allowLateJoin == true));
 
+      // Players can leave the session (remove only their own data)
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.players.keys()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['players', 'scores', 'streaks', 'coldStreaks', 'badges', 'correctCounts', 'answers'])
+        && request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.scores.diff(resource.data.scores).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.streaks.diff(resource.data.streaks).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.coldStreaks.diff(resource.data.coldStreaks).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.badges.diff(resource.data.badges).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.correctCounts.diff(resource.data.correctCounts).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.answers.diff(resource.data.answers).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.players[request.auth.uid] == null
+        && request.resource.data.scores[request.auth.uid] == null
+        && request.resource.data.streaks[request.auth.uid] == null
+        && request.resource.data.coldStreaks[request.auth.uid] == null
+        && request.resource.data.badges[request.auth.uid] == null
+        && request.resource.data.correctCounts[request.auth.uid] == null
+        && request.resource.data.answers[request.auth.uid] == null;
+
       // Players can update their own answers, reactions, scores
       // ANTI-CHEAT: Prevent answer resubmission - user can only submit once per question
       allow update: if request.auth != null

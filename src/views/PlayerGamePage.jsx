@@ -7,7 +7,7 @@ import { haptic } from '@/utils/haptic'
 
 const toMillis = (value) => (value?.toMillis ? value.toMillis() : value)
 
-export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
+export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession }) {
   const [countdown, setCountdown] = useState(3)
   const [canSubmit, setCanSubmit] = useState(true)
 
@@ -29,6 +29,15 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
+  const LeaveButton = () => (
+    <button
+      onClick={onLeaveSession}
+      className="absolute top-4 right-4 glass px-4 py-2 rounded-xl text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all z-10"
+    >
+      <i className="fa fa-sign-out-alt mr-2"></i>
+      <span className="hidden sm:inline">Leave</span>
+    </button>
+  )
 
   const myScore = scores?.[user?.uid] || 0
 
@@ -67,7 +76,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     const myScore = scores[user?.uid] || 0
 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative">
+        <LeaveButton />
         <Confetti show={myRank <= 3} />
         <div className="mb-8">
           {myRank === 1 ? (
@@ -92,8 +102,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
         <p className="text-xl text-slate-500 mb-4">{myScore} points</p>
         <MyBadges badges={myBadges} badgeTypes={badgeTypes} />
 
-        <button onClick={() => {localStorage.removeItem('quizSession'); setView('home'); setSession(null); setJoinForm({ pin: '', name: '' });}} className="btn-gradient px-8 py-4 rounded-2xl font-bold">
-          <i className="fa fa-home mr-2"></i>Back to Home
+        <button onClick={onLeaveSession} className="btn-gradient px-8 py-4 rounded-2xl font-bold">
+          <i className="fa fa-home mr-2"></i>Leave Session
         </button>
       </div>
     )
@@ -105,7 +115,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     const multiplier = getMultiplier(myStreak)
 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative">
+        <LeaveButton />
         <Confetti show={showConfetti} />
         <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 animate-bounce-in ${wasCorrect ? 'bg-green-600 animate-correct-glow' : 'bg-red-600 animate-wrong-flash'}`}>
           <i className={`fa ${wasCorrect ? 'fa-check' : 'fa-times'} text-5xl`}></i>
@@ -150,7 +161,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     const progress = countdown > 0 ? ((3 - countdown) / 3) * 100 : 100
 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative">
+        <LeaveButton />
         <div className="max-w-md w-full">
           {/* Question preview */}
           <div className="mb-8">
@@ -183,7 +195,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
   if (answered) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative">
+        <LeaveButton />
         <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center mb-6 animate-pulse">
           <i className="fa fa-check text-4xl"></i>
         </div>
@@ -214,7 +227,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-4">
+    <div className="min-h-screen flex flex-col p-4 relative">
+      <LeaveButton />
       <div className="mb-4">
         <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartMs} />
       </div>

@@ -1,4 +1,4 @@
-export default function PlayerWaitPage({ joinForm }) {
+export default function PlayerWaitPage({ joinForm, onLeaveSession }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -20,6 +20,13 @@ export default function PlayerWaitPage({ joinForm }) {
           <span className="w-3 h-3 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0.1s' }}></span>
           <span className="w-3 h-3 rounded-full bg-pink-500 animate-bounce" style={{ animationDelay: '0.2s' }}></span>
         </div>
+
+        <button
+          onClick={onLeaveSession}
+          className="mt-8 glass px-6 py-3 rounded-xl text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all"
+        >
+          <i className="fa fa-sign-out-alt mr-2"></i>Leave Session
+        </button>
       </div>
     </div>
   )

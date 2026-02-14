@@ -9,7 +9,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  deleteField
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { sanitizePlayerName } from '@/shared/utils/sanitization'
@@ -390,6 +391,52 @@ export async function deleteSession(pin) {
 }
 
 /**
+ * Leave a session as a player (remove own participation data)
+ * @param {Object} params - Leave parameters
+ * @param {string} params.pin - Session PIN
+ * @param {string} params.userId - User ID
+ * @returns {Promise<Object>} - Object with { success: boolean, error?: string }
+ */
+export async function leaveSession({ pin, userId }) {
+  try {
+    if (!pin || !userId) {
+      return { success: false, error: 'PIN and userId are required' }
+    }
+
+    await updateDoc(doc(db, 'sessions', pin), {
+      [`players.${userId}`]: deleteField(),
+      [`scores.${userId}`]: deleteField(),
+      [`streaks.${userId}`]: deleteField(),
+      [`coldStreaks.${userId}`]: deleteField(),
+      [`badges.${userId}`]: deleteField(),
+      [`correctCounts.${userId}`]: deleteField(),
+      [`answers.${userId}`]: deleteField()
+    })
+
+    // Clear recovery state if leaving the same session
+    try {
+      const saved = localStorage.getItem('quizSession')
+      if (saved) {
+        const { pin: savedPin } = JSON.parse(saved)
+        if (savedPin === pin) {
+          localStorage.removeItem('quizSession')
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to clear localStorage on leave:', e)
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Leave session error:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to leave session'
+    }
+  }
+}
+
+/**
  * Subscribe to session updates
  * @param {string} pin - Session PIN
  * @param {Function} callback - Called with (session) when session updates
@@ -456,6 +503,7 @@ export const sessionService = {
   kickPlayer,
   toggleLateJoin,
   deleteSession,
+  leaveSession,
   subscribeToSession,
   updateSession
 }
