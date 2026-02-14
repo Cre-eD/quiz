@@ -3,12 +3,24 @@ import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import { optionColors } from '@/constants'
 
+const toMillis = (value) => (value?.toMillis ? value.toMillis() : value)
+
 export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }) {
   // ALL HOOKS MUST BE AT THE TOP - React requires this!
   const [countdown, setCountdown] = useState(3)
   const reactionsContainerRef = useRef(null)
   const processedIdsRef = useRef(new Set())
-  const localQuestionStartTime = useRef(null)
+  const questionStartTime =
+    session?.questionStartTime ||
+    session?.questionStartTimeFallback ||
+    session?.questionStartMs ||
+    session?.countdownEnd
+  const questionStartMs = toMillis(questionStartTime)
+  const shouldForceQuestionPhase =
+    gamePhase === 'countdown' &&
+    typeof questionStartMs === 'number' &&
+    Date.now() >= questionStartMs
+  const effectivePhase = shouldForceQuestionPhase ? 'question' : gamePhase
 
   // Process new reactions and add them directly to DOM (no React state)
   useEffect(() => {
@@ -45,20 +57,9 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
     if (container) container.innerHTML = ''
   }, [currentQuestion])
 
-  // Predict question start time based on countdown end (fixes Firestore propagation delay)
-  // Host knows countdownEnd in advance, so use that as question start time prediction
-  useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
-      // Capture the countdown end time as the predicted question start time
-      localQuestionStartTime.current = session.countdownEnd
-    } else if (gamePhase !== 'question') {
-      localQuestionStartTime.current = null
-    }
-  }, [gamePhase, session?.countdownEnd, currentQuestion])
-
   // Countdown timer effect
   useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
+    if (effectivePhase === 'countdown' && session?.countdownEnd) {
       const updateCountdown = () => {
         const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
         setCountdown(Math.max(0, remaining))
@@ -69,7 +70,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
       const interval = setInterval(updateCountdown, 100)
       return () => clearInterval(interval)
     }
-  }, [gamePhase, session?.countdownEnd])
+  }, [effectivePhase, session?.countdownEnd])
 
   // Derived values (can be after hooks, before conditionals)
   const question = session?.quiz?.questions?.[currentQuestion]
@@ -182,7 +183,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   }
 
   // Countdown phase for host
-  if (gamePhase === 'countdown') {
+  if (effectivePhase === 'countdown') {
 
     return (
       <div className="min-h-screen flex flex-col p-6">
@@ -246,7 +247,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         </div>
       </div>
 
-      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime || session?.questionStartTimeFallback || localQuestionStartTime.current} />
+      <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={showQuestionResults} startTime={questionStartTime} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>

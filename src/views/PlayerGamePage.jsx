@@ -1,43 +1,40 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import MyBadges from '@/features/game/components/MyBadges'
 import { optionColors } from '@/constants'
 import { haptic } from '@/utils/haptic'
 
+const toMillis = (value) => (value?.toMillis ? value.toMillis() : value)
+
 export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
   const [countdown, setCountdown] = useState(3)
   const [canSubmit, setCanSubmit] = useState(true)
-  const localQuestionStartTime = useRef(null)
 
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
+  const questionStartTime =
+    session?.questionStartTime ||
+    session?.questionStartTimeFallback ||
+    session?.questionStartMs ||
+    session?.countdownEnd
+  const questionStartMs = toMillis(questionStartTime)
+  const shouldForceQuestionPhase =
+    gamePhase === 'countdown' &&
+    typeof questionStartMs === 'number' &&
+    Date.now() >= questionStartMs
+  const effectivePhase = shouldForceQuestionPhase ? 'question' : gamePhase
   const myStreak = streaks?.[user?.uid] || 0
   const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
 
-  // Predict question start time based on countdown end (fixes Firestore propagation delay)
-  // Players know countdownEnd in advance, so capture that as question start time
-  useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
-      // Capture the countdown end time as the question start time
-      // This will be accurate even before Firestore propagates the status change
-      localQuestionStartTime.current = session.countdownEnd
-    } else if (gamePhase !== 'question') {
-      // Reset when not in countdown or question phase
-      localQuestionStartTime.current = null
-    }
-  }, [gamePhase, session?.countdownEnd, currentQuestion])
-
-  // Use server timestamp for accuracy, but fall back to local time if not available yet
-  const questionStartTime = session?.questionStartTime || session?.questionStartTimeFallback || localQuestionStartTime.current
   const myScore = scores?.[user?.uid] || 0
 
   // Countdown timer for countdown phase
   useEffect(() => {
-    if (gamePhase === 'countdown' && session?.countdownEnd) {
+    if (effectivePhase === 'countdown' && session?.countdownEnd) {
       const updateCountdown = () => {
         const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
         setCountdown(Math.max(0, remaining))
@@ -51,18 +48,18 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     } else {
       setCountdown(3) // Reset to default when not in countdown
     }
-  }, [gamePhase, session?.countdownEnd])
+  }, [effectivePhase, session?.countdownEnd])
 
   // Button disable logic - sync with TimerBar
   useEffect(() => {
-    if (gamePhase !== 'question' || !questionStartTime) {
+    if (effectivePhase !== 'question' || !questionStartTime) {
       setCanSubmit(true)
       return
     }
 
     // Allow submissions until timer fully expires
     setCanSubmit(true)
-  }, [gamePhase, questionStartTime, answered])
+  }, [effectivePhase, questionStartTime, answered])
 
 
   if (gamePhase === 'final') {
@@ -149,7 +146,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   }
 
   // Countdown phase - sleek loading state
-  if (gamePhase === 'countdown') {
+  if (effectivePhase === 'countdown') {
     const progress = countdown > 0 ? ((3 - countdown) / 3) * 100 : 100
 
     return (
@@ -219,7 +216,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   return (
     <div className="min-h-screen flex flex-col p-4">
       <div className="mb-4">
-        <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={questionStartTime} />
+        <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartTime} />
       </div>
 
       {myStreak >= 2 && (
