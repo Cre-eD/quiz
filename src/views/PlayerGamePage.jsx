@@ -205,7 +205,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   return (
     <div className="min-h-screen flex flex-col p-4">
       <div className="mb-4">
-        <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={session?.questionStartTime} />
+        <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={() => {}} startTime={questionStartTime} />
       </div>
 
       {myStreak >= 2 && (

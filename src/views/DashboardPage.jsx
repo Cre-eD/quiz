@@ -315,6 +315,13 @@ export default function DashboardPage(props) {
         setSelectedLeaderboard={setSelectedLeaderboard}
         onLaunch={confirmLaunch}
         onCancel={() => setLaunchingQuiz(null)}
+        newLeaderboardName={newLeaderboardName}
+        setNewLeaderboardName={setNewLeaderboardName}
+        newLeaderboardCourse={newLeaderboardCourse}
+        setNewLeaderboardCourse={setNewLeaderboardCourse}
+        newLeaderboardYear={newLeaderboardYear}
+        setNewLeaderboardYear={setNewLeaderboardYear}
+        createLeaderboard={createLeaderboard}
       />
 
       <ConfirmModal {...confirmModal} />
