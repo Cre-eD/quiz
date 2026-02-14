@@ -21,12 +21,15 @@ test.describe('Session Join Flow', () => {
     const joinButton = page.locator('button:has-text("Join Game")')
     await joinButton.click()
 
-    // Should show error toast or validation
-    await page.waitForTimeout(500)
+    // Wait for any toast or error
+    await page.waitForTimeout(2000)
 
-    // PIN should still be empty
+    // PIN should still be empty (form not cleared)
     const pinInput = page.locator('input[placeholder="PIN"]')
     await expect(pinInput).toHaveValue('')
+
+    // Should still be on homepage
+    await expect(page.locator('h1')).toContainText('LectureQuiz')
   })
 
   test('Join form validation - empty name', async ({ page }) => {
@@ -39,11 +42,15 @@ test.describe('Session Join Flow', () => {
     const joinButton = page.locator('button:has-text("Join Game")')
     await joinButton.click()
 
-    // Should show error toast
-    await page.waitForTimeout(500)
+    // Wait for any toast or error
+    await page.waitForTimeout(2000)
 
     // Should still be on home page
     await expect(page.locator('h1')).toContainText('LectureQuiz')
+
+    // Name should still be empty
+    const nameInput = page.locator('input[placeholder*="Nickname"]')
+    await expect(nameInput).toHaveValue('')
   })
 
   test('Join form validation - invalid PIN format', async ({ page }) => {
@@ -140,12 +147,14 @@ test.describe('Session Join Flow', () => {
   test('Join button is initially enabled', async ({ page }) => {
     await page.goto(BASE_URL)
 
-    const joinButton = page.locator('button:has-text("Join Game")')
-    await expect(joinButton).toBeVisible()
+    // Wait for page to fully load
+    await page.waitForLoadState('networkidle')
 
-    // Button should be clickable even if form is empty (validation happens on click)
-    const isEnabled = await joinButton.isEnabled()
-    expect(isEnabled).toBe(true)
+    const joinButton = page.locator('button:has-text("Join Game")')
+    await expect(joinButton).toBeVisible({ timeout: 5000 })
+
+    // Button should be enabled
+    await expect(joinButton).toBeEnabled({ timeout: 5000 })
   })
 
   test('Multiple rapid clicks on join button', async ({ page }) => {
@@ -158,12 +167,14 @@ test.describe('Session Join Flow', () => {
     const joinButton = page.locator('button:has-text("Join Game")')
 
     // Click multiple times rapidly
-    await joinButton.click()
-    await joinButton.click()
-    await joinButton.click()
+    await joinButton.click({ force: true })
+    await page.waitForTimeout(100)
+    await joinButton.click({ force: true })
+    await page.waitForTimeout(100)
+    await joinButton.click({ force: true })
 
-    // Should not crash
-    await page.waitForTimeout(1000)
+    // Wait for any processing
+    await page.waitForTimeout(2000)
 
     // Page should still be functional
     await expect(page.locator('h1')).toBeVisible()

@@ -71,3 +71,4 @@ Thumbs.db
 # Quiz files - only commit encrypted versions
 quizzes/**/*.json
 !quizzes/**/*.enc.json
+.auth/*.json

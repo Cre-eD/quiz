@@ -13,12 +13,13 @@ export default defineConfig({
     baseURL: process.env.TEST_URL || 'https://devops-quiz-2c930.web.app',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    hasTouch: true,
   },
 
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], hasTouch: true },
     },
   ],
 })
