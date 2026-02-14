@@ -66,6 +66,7 @@ export function useAuth() {
   // Listen to auth state changes
   useEffect(() => {
     let mounted = true
+    let retryTimeoutId = null
 
     const unsubscribe = authService.onAuthStateChanged((firebaseUser) => {
       if (!mounted) return
@@ -74,14 +75,26 @@ export function useAuth() {
     })
 
     // Immediately check if we have a user, if not sign in anonymously
-    const initAuth = async () => {
+    const initAuth = async (retryCount = 0) => {
       const currentUser = authService.getCurrentUser()
-      if (!currentUser) {
+      if (!currentUser && mounted) {
         try {
           await authService.signInAnonymously()
         } catch (error) {
           console.error('Initial anonymous sign-in failed:', error)
-          if (mounted) setLoading(false)
+
+          // If rate limited and not too many retries, use exponential backoff
+          if (error.message?.includes('too-many-requests') && retryCount < 3) {
+            const delayMs = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
+            console.log(`Rate limited. Retrying in ${delayMs}ms... (attempt ${retryCount + 1}/3)`)
+
+            retryTimeoutId = setTimeout(() => {
+              if (mounted) initAuth(retryCount + 1)
+            }, delayMs)
+          } else {
+            // Give up after 3 retries or other errors
+            if (mounted) setLoading(false)
+          }
         }
       }
     }
@@ -90,6 +103,7 @@ export function useAuth() {
 
     return () => {
       mounted = false
+      if (retryTimeoutId) clearTimeout(retryTimeoutId)
       unsubscribe()
     }
   }, [])
