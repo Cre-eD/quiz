@@ -26,7 +26,7 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
   const createLeaderboard = async () => {
     if (!newLeaderboardName.trim()) {
       onToast?.("Please enter a leaderboard name", "error")
-      return
+      return { success: false }
     }
     const result = await leaderboardService.createLeaderboard({
       name: newLeaderboardName,
@@ -39,8 +39,10 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
       setNewLeaderboardYear(new Date().getFullYear())
       setShowLeaderboardModal(false)
       onToast?.("Leaderboard created!")
+      return { success: true, leaderboardId: result.leaderboardId }
     } else {
       onToast?.(result.error || "Failed to create leaderboard", "error")
+      return { success: false, error: result.error }
     }
   }
 

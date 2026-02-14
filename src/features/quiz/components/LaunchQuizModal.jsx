@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import CreateLeaderboardModal from '@/features/leaderboard/components/CreateLeaderboardModal'
 
 export default function LaunchQuizModal({
@@ -20,8 +20,6 @@ export default function LaunchQuizModal({
   const [courseFilter, setCourseFilter] = useState('all')
   const [yearFilter, setYearFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [pendingSelection, setPendingSelection] = useState(null)
-  const previousLeaderboardCount = useRef(leaderboards.length)
 
   if (!quiz) return null
 
@@ -56,45 +54,17 @@ export default function LaunchQuizModal({
 
   // Handle inline leaderboard creation
   const handleCreateLeaderboard = async () => {
-    // Store the criteria for the leaderboard we're about to create
-    const criteria = {
-      name: newLeaderboardName,
-      course: newLeaderboardCourse,
-      year: newLeaderboardYear
-    }
-    setPendingSelection(criteria)
-
     // Call the createLeaderboard function from useLeaderboards hook
-    // This will trigger Firestore subscription to update leaderboards array
-    await createLeaderboard()
+    const result = await createLeaderboard()
 
     // Close the create modal
     setShowCreateModal(false)
-  }
 
-  // Watch for new leaderboards being added and auto-select if it matches pending selection
-  useEffect(() => {
-    // Always update the count first
-    const currentCount = leaderboards.length
-
-    // Only process if we have a pending selection AND leaderboard count increased
-    if (pendingSelection && currentCount > previousLeaderboardCount.current) {
-      // Find the newly created leaderboard
-      const newLeaderboard = leaderboards.find(lb =>
-        lb.name === pendingSelection.name &&
-        lb.course === pendingSelection.course &&
-        lb.year === pendingSelection.year
-      )
-
-      if (newLeaderboard) {
-        setSelectedLeaderboard(newLeaderboard.id)
-        setPendingSelection(null)
-      }
+    // Auto-select the newly created leaderboard
+    if (result?.success && result.leaderboardId) {
+      setSelectedLeaderboard(result.leaderboardId)
     }
-
-    // Always update the ref at the end
-    previousLeaderboardCount.current = currentCount
-  }, [leaderboards, pendingSelection, setSelectedLeaderboard])
+  }
 
   return (
     <>
