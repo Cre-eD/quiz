@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import MyBadges from '@/features/game/components/MyBadges'
@@ -8,6 +8,7 @@ import { haptic } from '@/utils/haptic'
 export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast }) {
   const [countdown, setCountdown] = useState(3)
   const [canSubmit, setCanSubmit] = useState(true)
+  const localQuestionStartTime = useRef(null)
 
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
@@ -16,9 +17,23 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
-  // Use session's questionStartTime for accurate speed tracking (null during countdown)
-  // Use fallback if serverTimestamp hasn't resolved yet
-  const questionStartTime = session?.questionStartTime || session?.questionStartTimeFallback
+
+  // Capture local time immediately when question phase starts (fixes Firestore propagation delay)
+  // This ensures timer starts immediately without waiting for server timestamp
+  useEffect(() => {
+    if (gamePhase === 'question') {
+      // Only set once per question
+      if (!localQuestionStartTime.current) {
+        localQuestionStartTime.current = Date.now()
+      }
+    } else {
+      // Reset when leaving question phase
+      localQuestionStartTime.current = null
+    }
+  }, [gamePhase, currentQuestion])
+
+  // Use server timestamp for accuracy, but fall back to local time if not available yet
+  const questionStartTime = session?.questionStartTime || session?.questionStartTimeFallback || localQuestionStartTime.current
   const myScore = scores?.[user?.uid] || 0
 
   // Countdown timer for countdown phase

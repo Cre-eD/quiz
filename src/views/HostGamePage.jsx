@@ -8,6 +8,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   const [countdown, setCountdown] = useState(3)
   const reactionsContainerRef = useRef(null)
   const processedIdsRef = useRef(new Set())
+  const localQuestionStartTime = useRef(null)
 
   // Process new reactions and add them directly to DOM (no React state)
   useEffect(() => {
@@ -43,6 +44,17 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
     const container = reactionsContainerRef.current
     if (container) container.innerHTML = ''
   }, [currentQuestion])
+
+  // Capture local time immediately when question phase starts (fixes Firestore propagation delay)
+  useEffect(() => {
+    if (gamePhase === 'question') {
+      if (!localQuestionStartTime.current) {
+        localQuestionStartTime.current = Date.now()
+      }
+    } else {
+      localQuestionStartTime.current = null
+    }
+  }, [gamePhase, currentQuestion])
 
   // Countdown timer effect
   useEffect(() => {
@@ -234,7 +246,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         </div>
       </div>
 
-      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime || session?.questionStartTimeFallback} />
+      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime || session?.questionStartTimeFallback || localQuestionStartTime.current} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>
