@@ -17,6 +17,9 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:4173'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'creeed22@gmail.com'
 
 test.describe('Complete Quiz Workflow', () => {
+  // Skip OAuth test in CI or WSL environments (can't manually sign in)
+  test.skip(process.env.CI || process.env.WSL_DISTRO_NAME, 'OAuth test requires manual sign-in')
+
   test('Full workflow: Sign in → Launch quiz → Join → Play → Results', async ({ page, context }) => {
     // ===== STEP 1: Page loads without errors =====
     console.log('Step 1: Loading homepage...')

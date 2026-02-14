@@ -16,6 +16,8 @@
     "test:e2e:headed": "npx playwright test --headed",
     "test:e2e:debug": "npx playwright test --debug",
     "test:e2e:report": "npx playwright show-report",
+    "test:e2e:test-mode": "npx playwright test workflow-test-mode.spec.js --headed",
+    "dev:test": "VITE_TEST_MODE=true npm run dev",
     "test:all": "vitest run && npx playwright test",
     "test:local": "bash scripts/test-local.sh",
     "test:smoke": "npx playwright test smoke.spec.js",

@@ -11,15 +11,25 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged
 } from 'firebase/auth'
-import { auth, googleProvider, ADMIN_EMAIL } from '@/lib/firebase/config'
+import { auth, googleProvider, ADMIN_EMAIL, IS_TEST_MODE } from '@/lib/firebase/config'
 
 /**
  * Check if a user is an admin based on their email
+ * In test mode (development only), any authenticated user is treated as admin
+ * This allows E2E testing without OAuth complexity
  * @param {Object} user - Firebase user object
  * @returns {boolean} - True if user is admin, false otherwise
  */
 export function isAdmin(user) {
   if (!user || !user.email) return false
+
+  // Test mode: Grant admin access to any authenticated user (non-anonymous)
+  // SECURITY: Only works in DEV builds, completely removed from production
+  if (IS_TEST_MODE && !user.isAnonymous) {
+    console.log('🧪 Test mode: Granting admin access for E2E testing')
+    return true
+  }
+
   return user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
 }
 
@@ -100,6 +110,12 @@ export async function handleRedirectResult() {
 export async function validateAdminAccess(user) {
   if (!user) {
     return { isAdmin: false, error: 'No user provided' }
+  }
+
+  // Test mode: Allow any authenticated (non-anonymous) user
+  if (IS_TEST_MODE && !user.isAnonymous) {
+    console.log('🧪 Test mode: Allowing admin access for E2E testing')
+    return { isAdmin: true }
   }
 
   const userEmail = (user.email || '').toLowerCase()

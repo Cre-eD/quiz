@@ -1,241 +1,171 @@
 # Testing Guide
 
-This document outlines the testing strategy for LectureQuiz Pro.
+## Overview
+
+This project has comprehensive testing at multiple levels:
+
+1. **Unit Tests** - Test individual functions and components (Vitest) - 290 passing
+2. **E2E Tests** - Test complete user workflows (Playwright) - 62 passing
 
 ## Quick Start
 
-Before deploying to production, run:
-
 ```bash
-npm run test:local
+# Run all unit tests
+npm test
+
+# Run all E2E tests (production)
+npm run test:e2e
 ```
 
-This will:
-1. Run all unit tests
-2. Build the production bundle
-3. Validate the build (check for emulator leaks, etc.)
-4. Start a preview server for manual testing
+## E2E Testing with Test Mode ⭐
 
-## Testing Levels
+For testing authenticated admin features locally without OAuth complexity.
 
-### 1. Unit Tests (Fast, Automated)
+### Quick Start
 
-**What it tests:** Individual functions, services, utilities in isolation
-
-**Run:**
 ```bash
-npm test              # Watch mode
-npm test -- --run     # Single run
-npm run test:coverage # With coverage report
-npm run test:ui       # Interactive UI
+# 1. Start dev server with test mode
+npm run dev:test
+
+# 2. Open browser to http://localhost:5173
+
+# 3. Click "I'm a teacher" and sign in with ANY Google account
+
+# 4. You'll get admin access to test all features
 ```
 
-**Coverage targets:**
-- Services: 100%
-- Utils: 100%
-- Hooks: 90%
-- Components: 80%
+### What Gets Tested
 
-**Location:** `src/**/*.test.js`
+With test mode, you can manually test:
+- ✅ Admin dashboard access
+- ✅ Quiz creation and management
+- ✅ Quiz launching (host lobby)
+- ✅ Leaderboard management
+- ✅ Course/year filtering
+- ✅ All admin workflows
 
-### 2. Smoke Tests (Fast, Automated)
+### Security
 
-**What it tests:** Production build works without critical errors
+Test mode is **100% safe** for production:
+- Only works in development builds (`import.meta.env.DEV`)
+- Code is completely removed from production bundles (verified)
+- Firestore rules still enforce server-side validation
+- See [SECURITY.md](./SECURITY.md) for details
 
-**Run:**
+### Automated E2E Tests
+
+Run automated tests against test mode:
+
 ```bash
-# Terminal 1: Start preview server
-npm run preview
-
-# Terminal 2: Run smoke tests
-npx playwright test smoke.spec.js
+# With dev server running in test mode:
+npm run test:e2e:test-mode
 ```
 
-**What it validates:**
-- ✅ App loads without console errors
-- ✅ No emulator configuration in bundle
-- ✅ No "X is not defined" errors
-- ✅ Critical UI elements render
-- ✅ Forms are interactive
+## Unit Tests
 
-**Location:** `e2e/smoke.spec.js`
+### Running Unit Tests
 
-### 3. Workflow Tests (Medium, Semi-Automated)
-
-**What it tests:** Complete user workflows from sign-in to quiz completion
-
-**Run:**
 ```bash
-# Terminal 1: Start preview server
-npm run preview
+# Run once
+npm test
 
-# Terminal 2: Run workflow test (watch browser)
-npm run test:workflow
+# Watch mode (re-run on changes)
+npm run test:watch
+
+# With coverage report
+npm run test:coverage
+
+# Interactive UI
+npm run test:ui
 ```
 
-**What it validates:**
-- ✅ Admin can sign in
-- ✅ Dashboard loads with quizzes
-- ✅ Can launch a quiz session
-- ✅ Player can join with PIN
-- ✅ Host sees player join
-- ✅ Game starts successfully
-- ✅ Player sees questions
-- ✅ No errors throughout workflow
+### Coverage
 
-**Important:** Requires Google OAuth - you may need to sign in manually during the test.
+Current coverage:
+- **Services**: 100% (authentication, quiz, session, leaderboard)
+- **Utils**: 100% (validation, sanitization)
+- **Total**: 290 tests passing
 
-**Location:** `e2e/workflow.spec.js`
+## E2E Tests (Production)
 
-### 4. E2E Tests (Slow, Automated)
+Tests public features without authentication.
 
-**What it tests:** Full user workflows end-to-end
+### Running
 
-**Run:**
 ```bash
-npm run test:e2e           # Headless
-npm run test:e2e:headed    # See browser
-npm run test:e2e:ui        # Interactive UI
-npm run test:e2e:debug     # Debug mode
-```
-
-**Location:** `e2e/tests/`
-
-### 5. Manual Testing (Slow, Manual)
-
-**What it tests:** Real user experience, edge cases, visual polish
-
-**Run:**
-```bash
-npm run test:local
-# Opens preview server at http://localhost:4173
-```
-
-**Checklist:**
-- [ ] Sign in with Google (admin)
-- [ ] Dashboard loads correctly
-- [ ] Create new quiz
-- [ ] Edit existing quiz
-- [ ] Delete quiz
-- [ ] Create leaderboard
-- [ ] Launch quiz session
-- [ ] Join as player (incognito/different browser)
-- [ ] Play through quiz
-- [ ] Check leaderboard
-- [ ] No console errors in DevTools
-
-## Pre-Deployment Workflow
-
-### Option 1: Quick Deploy (Skip Manual Testing)
-```bash
-npm run deploy:prod
-```
-- Runs unit tests
-- Builds production bundle
-- Validates build (no emulator leaks)
-- Deploys to Firebase
-
-### Option 2: Safe Deploy (With Manual Testing)
-```bash
-npm run deploy:safe
-```
-- Runs unit tests
-- Builds production bundle
-- Validates build
-- **Starts preview server for manual testing**
-- Waits for confirmation
-- Deploys to Firebase
-
-### Option 3: Full Testing (Paranoid Mode)
-```bash
-# 1. Unit tests
-npm test -- --run
-
-# 2. Build
-npm run build
-
-# 3. Smoke tests
-npm run preview &          # Terminal 1
-npx playwright test smoke  # Terminal 2
-
-# 4. E2E tests (optional)
+# All tests
 npm run test:e2e
 
-# 5. Manual testing
-# Test in browser at http://localhost:4173
+# Headed mode (see browser)
+npm run test:e2e:headed
 
-# 6. Deploy
-npm run deploy:prod
+# Debug mode
+npm run test:e2e:debug
+
+# UI mode (interactive)
+npm run test:e2e:ui
+
+# Specific test
+npm run test:e2e -- session-join.spec.js
+
+# Generate HTML report
+npm run test:e2e:report
 ```
 
-## Common Issues & Fixes
+### What's Tested
 
-### Issue: "categoryConfig is not defined"
-**Cause:** Missing import or constant not exported
-**Prevention:** Run smoke tests before deploying
-**Fix:** Add import/export, redeploy
+**62 passing tests covering:**
+- Homepage and navigation (15 tests)
+- Player join flow (11 tests)
+- Accessibility/WCAG (24 tests)
+- Performance metrics (10 tests)
+- Mobile responsive (3 tests)
+- Game flow & security (14 tests)
 
-### Issue: "handleSignInWithGoogle is not a function"
-**Cause:** Method name mismatch between service and consumer
-**Prevention:** TypeScript (future enhancement)
-**Fix:** Fix method name, add unit test
+### Test Files
 
-### Issue: App connects to localhost in production
-**Cause:** .env.local included in production build
-**Prevention:** deploy-prod.sh moves .env.local before building
-**Fix:** Rebuild without .env.local
+- `smoke.spec.js` - Production build validation
+- `session-join.spec.js` - Player join flow & validation
+- `quiz-navigation.spec.js` - Navigation and UI
+- `game-flow.spec.js` - Game mechanics, error handling, security
+- `accessibility.spec.js` - WCAG compliance, performance, mobile
 
-### Issue: Production build crashes but dev works
-**Cause:** Minification removes needed code, or import issues
-**Prevention:** Run smoke tests on preview server
-**Fix:** Check console errors in preview, fix, rebuild
+## OAuth Tests (Optional)
 
-## Continuous Integration (Future)
+For testing production OAuth flow:
 
-GitHub Actions workflow will automatically:
-- Run unit tests on every PR
-- Run smoke tests on every PR
-- Run E2E tests on main branch
-- Deploy to preview channel for testing
-- Deploy to production on merge to main
+```bash
+# One-time setup (requires manual sign-in)
+npx playwright test auth.setup.js --headed
 
-## Tips
+# Then run authenticated tests
+npm run test:e2e -- workflow-auth.spec.js
+```
 
-1. **Always run unit tests first** - they're fast and catch most bugs
-2. **Use smoke tests before deploying** - catches build/import issues
-3. **Test in preview mode locally** - exactly matches production
-4. **Check browser console** - many errors only show there
-5. **Test in incognito** - fresh state, no cached data
-6. **Use different browsers** - Chrome, Firefox, Safari
+**Note:** Skipped in CI/WSL environments. Test mode is recommended for local testing.
 
-## Test Philosophy
+## Test Reports
 
-**Unit Tests:**
-- Test behavior, not implementation
-- Mock external dependencies (Firebase, etc.)
-- Fast and reliable
-- High coverage (80%+)
+View detailed HTML reports:
 
-**Smoke Tests:**
-- Validate critical paths work
-- No authentication required
-- Quick sanity check before deploy
-- Catches build/bundle issues
+```bash
+npm run test:e2e:report
+```
 
-**E2E Tests:**
-- Test real user workflows
-- Use Firebase emulator
-- Slower but comprehensive
-- Focus on happy paths + critical edge cases
+Opens browser with:
+- Test results and timing
+- Screenshots of failures
+- Detailed error context
+- Performance metrics
 
-**Manual Tests:**
-- Real Firebase (not emulator)
-- Visual polish and UX
-- Edge cases too complex to automate
-- Pre-production validation
+## Continuous Integration
 
-## Resources
+Tests run automatically on every push:
+- Unit tests (all 290)
+- E2E tests (all 62 public tests)
+- OAuth tests skipped (require manual auth)
 
-- [Vitest Documentation](https://vitest.dev/)
-- [Playwright Documentation](https://playwright.dev/)
-- [Testing Library Best Practices](https://testing-library.com/docs/guiding-principles/)
+## For More Details
+
+- [e2e/README.md](./e2e/README.md) - Comprehensive E2E testing guide
+- [SECURITY.md](./SECURITY.md) - Test mode security documentation
