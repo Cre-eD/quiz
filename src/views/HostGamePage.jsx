@@ -206,7 +206,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
       </div>
 
-      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime} />
+      <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime || session?.questionStartTimeFallback} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>
