@@ -67,7 +67,7 @@ export async function startQuestionTimer(pin) {
       await updateDoc(sessionRef, {
         status: 'question',
         questionStartTime: serverTimestamp(),
-        questionStartTimeFallback: sessionData.countdownEnd  // Immediate fallback value
+        questionStartTimeFallback: Date.now()  // Current time as immediate fallback
       })
     }
 
