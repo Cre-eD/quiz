@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { categoryConfig } from '@/constants'
 import ConfirmModal from '@/components/ConfirmModal'
 import QuizLevelGroup from '@/features/quiz/components/QuizLevelGroup'
@@ -72,15 +72,25 @@ export default function DashboardPage(props) {
   const expandAll = () => setExpandedLevels(sortedLevels.reduce((acc, l) => ({ ...acc, [l]: true }), {}))
   const collapseAll = () => setExpandedLevels({})
 
-  // Leaderboard filtering
-  const leaderboardCourses = [...new Set(leaderboards.map(lb => lb.course).filter(Boolean))].sort()
-  const leaderboardYears = [...new Set(leaderboards.map(lb => lb.year).filter(Boolean))].sort((a, b) => b - a)
+  // Leaderboard filtering - memoized to prevent unnecessary re-renders
+  const leaderboardCourses = useMemo(() =>
+    [...new Set(leaderboards.map(lb => lb.course).filter(Boolean))].sort(),
+    [leaderboards]
+  )
 
-  const filteredLeaderboards = leaderboards.filter(lb => {
-    if (leaderboardCourseFilter !== 'all' && lb.course !== leaderboardCourseFilter) return false
-    if (leaderboardYearFilter !== 'all' && lb.year !== parseInt(leaderboardYearFilter)) return false
-    return true
-  })
+  const leaderboardYears = useMemo(() =>
+    [...new Set(leaderboards.map(lb => lb.year).filter(Boolean))].sort((a, b) => b - a),
+    [leaderboards]
+  )
+
+  const filteredLeaderboards = useMemo(() =>
+    leaderboards.filter(lb => {
+      if (leaderboardCourseFilter !== 'all' && lb.course !== leaderboardCourseFilter) return false
+      if (leaderboardYearFilter !== 'all' && lb.year !== parseInt(leaderboardYearFilter)) return false
+      return true
+    }),
+    [leaderboards, leaderboardCourseFilter, leaderboardYearFilter]
+  )
 
   const hasGoogleAuth = user && user.email
   const isAuthorized = hasGoogleAuth && isAdmin

@@ -57,11 +57,12 @@ export default function LaunchQuizModal({
   // Handle inline leaderboard creation
   const handleCreateLeaderboard = async () => {
     // Store the criteria for the leaderboard we're about to create
-    setPendingSelection({
+    const criteria = {
       name: newLeaderboardName,
       course: newLeaderboardCourse,
       year: newLeaderboardYear
-    })
+    }
+    setPendingSelection(criteria)
 
     // Call the createLeaderboard function from useLeaderboards hook
     // This will trigger Firestore subscription to update leaderboards array
@@ -73,14 +74,11 @@ export default function LaunchQuizModal({
 
   // Watch for new leaderboards being added and auto-select if it matches pending selection
   useEffect(() => {
-    // Only process if we have a pending selection
-    if (!pendingSelection) {
-      previousLeaderboardCount.current = leaderboards.length
-      return
-    }
+    // Always update the count first
+    const currentCount = leaderboards.length
 
-    // Check if a new leaderboard was added
-    if (leaderboards.length > previousLeaderboardCount.current) {
+    // Only process if we have a pending selection AND leaderboard count increased
+    if (pendingSelection && currentCount > previousLeaderboardCount.current) {
       // Find the newly created leaderboard
       const newLeaderboard = leaderboards.find(lb =>
         lb.name === pendingSelection.name &&
@@ -92,11 +90,11 @@ export default function LaunchQuizModal({
         setSelectedLeaderboard(newLeaderboard.id)
         setPendingSelection(null)
       }
-
-      // Update count after processing
-      previousLeaderboardCount.current = leaderboards.length
     }
-  }, [leaderboards, pendingSelection])
+
+    // Always update the ref at the end
+    previousLeaderboardCount.current = currentCount
+  }, [leaderboards, pendingSelection, setSelectedLeaderboard])
 
   return (
     <>
