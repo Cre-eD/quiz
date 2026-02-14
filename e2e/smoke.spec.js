@@ -9,6 +9,8 @@
 
 import { test, expect } from '@playwright/test'
 
+const BASE_URL = process.env.BASE_URL || 'http://localhost:4173'
+
 test.describe('Production Build Smoke Tests', () => {
   test('Homepage loads without errors', async ({ page }) => {
     const errors = []
@@ -18,7 +20,7 @@ test.describe('Production Build Smoke Tests', () => {
       }
     })
 
-    await page.goto('http://localhost:4173')
+    await page.goto(BASE_URL)
 
     // Check page loads
     await expect(page.locator('h1')).toContainText('LectureQuiz')
@@ -34,7 +36,7 @@ test.describe('Production Build Smoke Tests', () => {
   })
 
   test('No emulator configuration in production bundle', async ({ page }) => {
-    await page.goto('http://localhost:4173')
+    await page.goto(BASE_URL)
 
     // Check that Firebase is NOT trying to connect to emulators
     const logs = []
@@ -56,7 +58,7 @@ test.describe('Production Build Smoke Tests', () => {
   })
 
   test('Can interact with join form', async ({ page }) => {
-    await page.goto('http://localhost:4173')
+    await page.goto(BASE_URL)
 
     // Fill in PIN
     const pinInput = page.locator('input[placeholder="PIN"]')
@@ -79,7 +81,7 @@ test.describe('Production Build Smoke Tests', () => {
       errors.push(error.message)
     })
 
-    await page.goto('http://localhost:4173')
+    await page.goto(BASE_URL)
 
     // Wait for app to initialize
     await page.waitForTimeout(1000)
@@ -94,7 +96,7 @@ test.describe('Production Build Smoke Tests', () => {
   })
 
   test('Dashboard page renders for unauthenticated user', async ({ page }) => {
-    await page.goto('http://localhost:4173')
+    await page.goto(BASE_URL)
 
     // Click "I'm a teacher" button
     await page.locator('button:has-text("teacher")').click()
