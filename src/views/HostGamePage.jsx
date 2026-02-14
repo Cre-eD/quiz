@@ -3,7 +3,7 @@ import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import { optionColors } from '@/constants'
 
-export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }) {
+export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }) {
   // ALL HOOKS MUST BE AT THE TOP - React requires this!
   const [countdown, setCountdown] = useState(3)
   const reactionsContainerRef = useRef(null)
@@ -115,6 +115,14 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
         <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
+        <button
+          onClick={abortGame}
+          className="absolute top-4 right-4 glass px-4 py-2 rounded-xl text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all flex items-center gap-2"
+          title="Stop quiz and disconnect all players"
+        >
+          <i className="fa fa-stop-circle"></i>
+          <span className="hidden sm:inline">Stop Quiz</span>
+        </button>
         <h2 className="text-3xl font-bold mb-2">Question {currentQuestion + 1} Results</h2>
         <p className="text-slate-400 mb-4">Correct answer: <span className="text-green-400 font-semibold">{question?.options[question?.correct]}</span></p>
 
@@ -169,7 +177,17 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
         <div className="flex justify-between items-center mb-4">
           <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
-          <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{totalPlayers} players</span>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{totalPlayers} players</span>
+            <button
+              onClick={abortGame}
+              className="glass px-3 py-1.5 rounded-lg text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all flex items-center gap-2"
+              title="Stop quiz and disconnect all players"
+            >
+              <i className="fa fa-stop-circle"></i>
+              <span className="hidden sm:inline text-sm">Stop</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-grow flex flex-col items-center justify-center text-center py-8 relative">
@@ -203,7 +221,17 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
       <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
       <div className="flex justify-between items-center mb-4">
         <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
-        <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400"><i className="fa fa-users mr-2"></i>{answeredCount}/{totalPlayers} answered</span>
+          <button
+            onClick={abortGame}
+            className="glass px-3 py-1.5 rounded-lg text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all flex items-center gap-2"
+            title="Stop quiz and disconnect all players"
+          >
+            <i className="fa fa-stop-circle"></i>
+            <span className="hidden sm:inline text-sm">Stop</span>
+          </button>
+        </div>
       </div>
 
       <TimerBar duration={25} isRunning={gamePhase === 'question'} onComplete={showQuestionResults} startTime={session?.questionStartTime || session?.questionStartTimeFallback} />

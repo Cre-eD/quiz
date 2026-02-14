@@ -209,7 +209,14 @@ export default function App() {
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.badges) setBadges(data.badges)
         },
-        (error) => showToast("Session connection lost", "error")
+        (error) => {
+          // Session deleted or connection lost - clean up and redirect home
+          localStorage.removeItem('quizSession')
+          setSession(null)
+          setView('home')
+          setJoinForm({ pin: '', name: '' })
+          showToast("Quiz session ended by host", "info")
+        }
       )
     }
   }, [view, session?.pin, user?.uid])
@@ -369,6 +376,20 @@ export default function App() {
       setView('dash')
     } else {
       showToast(result.error || "Failed to cancel session", "error")
+    }
+  }
+
+  const abortGame = async () => {
+    if (!confirm('Are you sure you want to stop the quiz? All players will be disconnected.')) {
+      return
+    }
+    const result = await sessionService.deleteSession(session.pin)
+    if (result.success) {
+      setSession(null)
+      setView('dash')
+      showToast("Quiz stopped", "info")
+    } else {
+      showToast(result.error || "Failed to stop quiz", "error")
     }
   }
 
@@ -579,7 +600,7 @@ export default function App() {
         )}
         {view === 'play-host' && (
           <motion.div key="play-host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HostGamePage {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, showQuestionResults, nextQuestion }} />
+            <HostGamePage {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }} />
           </motion.div>
         )}
         {view === 'wait' && (

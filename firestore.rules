@@ -64,10 +64,17 @@ service cloud.firestore {
         && (resource.data.status == 'lobby' || (resource.data.status == 'active' && resource.data.allowLateJoin == true));
 
       // Players can update their own answers, reactions, scores
+      // ANTI-CHEAT: Prevent answer resubmission - user can only submit once per question
       allow update: if request.auth != null
         && request.auth.uid in resource.data.players.keys()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['answers', 'reactions', 'scores', 'streaks', 'coldStreaks', 'badges', 'correctCounts']);
+          .hasOnly(['answers', 'reactions', 'scores', 'streaks', 'coldStreaks', 'badges', 'correctCounts'])
+        && (
+          // If updating answers, ensure user hasn't already submitted for this question
+          !('answers' in request.resource.data.diff(resource.data).affectedKeys())
+          || !('answers' in resource.data.keys())  // answers map doesn't exist yet
+          || !(request.auth.uid in resource.data.answers.keys())  // user hasn't answered yet
+        );
     }
 
     // Leaderboards - admin can manage, anyone can read
