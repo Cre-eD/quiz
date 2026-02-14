@@ -17,11 +17,10 @@ export default function LaunchQuizModal({
   setNewLeaderboardYear,
   createLeaderboard
 }) {
+  // ALL hooks must be called before any early returns - Rules of Hooks
   const [courseFilter, setCourseFilter] = useState('all')
   const [yearFilter, setYearFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
-
-  if (!quiz) return null
 
   // Course display names
   const courseNames = {
@@ -51,6 +50,9 @@ export default function LaunchQuizModal({
       return true
     })
   }, [leaderboards, courseFilter, yearFilter])
+
+  // Early return AFTER all hooks to comply with Rules of Hooks
+  if (!quiz) return null
 
   // Handle inline leaderboard creation
   const handleCreateLeaderboard = async () => {
