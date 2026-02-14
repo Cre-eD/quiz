@@ -73,8 +73,15 @@ export default function LaunchQuizModal({
 
   // Watch for new leaderboards being added and auto-select if it matches pending selection
   useEffect(() => {
-    if (pendingSelection && leaderboards.length > previousLeaderboardCount.current) {
-      // A new leaderboard was added, find it and select it
+    // Only process if we have a pending selection
+    if (!pendingSelection) {
+      previousLeaderboardCount.current = leaderboards.length
+      return
+    }
+
+    // Check if a new leaderboard was added
+    if (leaderboards.length > previousLeaderboardCount.current) {
+      // Find the newly created leaderboard
       const newLeaderboard = leaderboards.find(lb =>
         lb.name === pendingSelection.name &&
         lb.course === pendingSelection.course &&
@@ -85,11 +92,11 @@ export default function LaunchQuizModal({
         setSelectedLeaderboard(newLeaderboard.id)
         setPendingSelection(null)
       }
-    }
 
-    // Update the previous count
-    previousLeaderboardCount.current = leaderboards.length
-  }, [leaderboards, pendingSelection, setSelectedLeaderboard])
+      // Update count after processing
+      previousLeaderboardCount.current = leaderboards.length
+    }
+  }, [leaderboards, pendingSelection])
 
   return (
     <>
