@@ -39,7 +39,8 @@ vi.mock('firebase/auth', () => ({
 vi.mock('@/lib/firebase/config', () => ({
   auth: mockAuth,
   googleProvider: mockGoogleProvider,
-  ADMIN_EMAIL: MOCK_ADMIN_EMAIL
+  ADMIN_EMAIL: MOCK_ADMIN_EMAIL,
+  IS_TEST_MODE: false
 }))
 
 import {
