@@ -18,19 +18,18 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const myBadges = badges?.[user?.uid] || {}
   const getMultiplier = (s) => s >= 4 ? 4 : s >= 3 ? 3 : s >= 2 ? 2 : 1
 
-  // Capture local time immediately when question phase starts (fixes Firestore propagation delay)
-  // This ensures timer starts immediately without waiting for server timestamp
+  // Predict question start time based on countdown end (fixes Firestore propagation delay)
+  // Players know countdownEnd in advance, so capture that as question start time
   useEffect(() => {
-    if (gamePhase === 'question') {
-      // Only set once per question
-      if (!localQuestionStartTime.current) {
-        localQuestionStartTime.current = Date.now()
-      }
-    } else {
-      // Reset when leaving question phase
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      // Capture the countdown end time as the question start time
+      // This will be accurate even before Firestore propagates the status change
+      localQuestionStartTime.current = session.countdownEnd
+    } else if (gamePhase !== 'question') {
+      // Reset when not in countdown or question phase
       localQuestionStartTime.current = null
     }
-  }, [gamePhase, currentQuestion])
+  }, [gamePhase, session?.countdownEnd, currentQuestion])
 
   // Use server timestamp for accuracy, but fall back to local time if not available yet
   const questionStartTime = session?.questionStartTime || session?.questionStartTimeFallback || localQuestionStartTime.current

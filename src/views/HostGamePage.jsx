@@ -45,16 +45,16 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
     if (container) container.innerHTML = ''
   }, [currentQuestion])
 
-  // Capture local time immediately when question phase starts (fixes Firestore propagation delay)
+  // Predict question start time based on countdown end (fixes Firestore propagation delay)
+  // Host knows countdownEnd in advance, so use that as question start time prediction
   useEffect(() => {
-    if (gamePhase === 'question') {
-      if (!localQuestionStartTime.current) {
-        localQuestionStartTime.current = Date.now()
-      }
-    } else {
+    if (gamePhase === 'countdown' && session?.countdownEnd) {
+      // Capture the countdown end time as the predicted question start time
+      localQuestionStartTime.current = session.countdownEnd
+    } else if (gamePhase !== 'question') {
       localQuestionStartTime.current = null
     }
-  }, [gamePhase, currentQuestion])
+  }, [gamePhase, session?.countdownEnd, currentQuestion])
 
   // Countdown timer effect
   useEffect(() => {
