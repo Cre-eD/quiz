@@ -7,6 +7,14 @@ export default function LeaderboardCard({
   onFlush,
   onDelete
 }) {
+  const courseNames = {
+    'devops': 'DevOps',
+    'devops-intro': 'DevOps Intro',
+    'devops-intro-rus': 'DevOps Intro (RU)',
+    'devsecops-intro': 'DevSecOps Intro',
+    'devsecops-intro-rus': 'DevSecOps Intro (RU)'
+  }
+
   return (
     <div className="glass p-6 rounded-2xl card-hover flex justify-between items-center animate-slide-up" style={{ animationDelay: `${index * 0.05}s` }}>
       <div className="flex items-center gap-4">
@@ -14,7 +22,19 @@ export default function LeaderboardCard({
           <i className="fa fa-trophy text-xl"></i>
         </div>
         <div>
-          <span className="text-xl font-bold block">{leaderboard.name}</span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl font-bold">{leaderboard.name}</span>
+            {leaderboard.course && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-purple-600/20 text-purple-400 rounded-lg">
+                <i className="fa fa-book mr-1"></i>{courseNames[leaderboard.course] || leaderboard.course}
+              </span>
+            )}
+            {leaderboard.year && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-blue-600/20 text-blue-400 rounded-lg">
+                <i className="fa fa-calendar mr-1"></i>{leaderboard.year}
+              </span>
+            )}
+          </div>
           <span className="text-sm text-slate-500"><i className="fa fa-users mr-1"></i>{playerCount} players</span>
         </div>
       </div>

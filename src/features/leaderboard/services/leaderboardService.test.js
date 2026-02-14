@@ -88,7 +88,7 @@ describe('leaderboardService', () => {
     it('should create leaderboard successfully', async () => {
       mockSetDoc.mockResolvedValue()
 
-      const result = await createLeaderboard('Spring 2024')
+      const result = await createLeaderboard({ name: 'Spring 2024', course: 'devops', year: 2024 })
 
       expect(result.success).toBe(true)
       expect(result.leaderboardId).toBeTruthy()
@@ -96,6 +96,8 @@ describe('leaderboardService', () => {
         expect.anything(),
         expect.objectContaining({
           name: 'Spring 2024',
+          course: 'devops',
+          year: 2024,
           players: {}
         })
       )
@@ -104,18 +106,20 @@ describe('leaderboardService', () => {
     it('should sanitize leaderboard name', async () => {
       mockSetDoc.mockResolvedValue()
 
-      await createLeaderboard('  Spring 2024  ')
+      await createLeaderboard({ name: '  Spring 2024  ', course: 'devops', year: 2024 })
 
       expect(mockSetDoc).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          name: 'Spring 2024'
+          name: 'Spring 2024',
+          course: 'devops',
+          year: 2024
         })
       )
     })
 
     it('should reject empty name', async () => {
-      const result = await createLeaderboard('')
+      const result = await createLeaderboard({ name: '', course: 'devops', year: 2024 })
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('required')
@@ -123,7 +127,7 @@ describe('leaderboardService', () => {
     })
 
     it('should reject null name', async () => {
-      const result = await createLeaderboard(null)
+      const result = await createLeaderboard({ name: null, course: 'devops', year: 2024 })
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('required')
@@ -133,11 +137,35 @@ describe('leaderboardService', () => {
       const error = new Error('Firestore error')
       mockSetDoc.mockRejectedValue(error)
 
-      const result = await createLeaderboard('Spring 2024')
+      const result = await createLeaderboard({ name: 'Spring 2024', course: 'devops', year: 2024 })
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('Firestore error')
       expect(console.error).toHaveBeenCalled()
+    })
+
+    it('should reject missing course', async () => {
+      const result = await createLeaderboard({ name: 'Spring 2024', course: '', year: 2024 })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Course is required')
+      expect(mockSetDoc).not.toHaveBeenCalled()
+    })
+
+    it('should reject invalid year (too low)', async () => {
+      const result = await createLeaderboard({ name: 'Spring 2024', course: 'devops', year: 2019 })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Valid year is required')
+      expect(mockSetDoc).not.toHaveBeenCalled()
+    })
+
+    it('should reject invalid year (too high)', async () => {
+      const result = await createLeaderboard({ name: 'Spring 2024', course: 'devops', year: 2101 })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Valid year is required')
+      expect(mockSetDoc).not.toHaveBeenCalled()
     })
   })
 

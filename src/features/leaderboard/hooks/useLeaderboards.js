@@ -7,6 +7,8 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
   const [dashTab, setDashTab] = useState('quizzes')
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [newLeaderboardName, setNewLeaderboardName] = useState('')
+  const [newLeaderboardCourse, setNewLeaderboardCourse] = useState('devops')
+  const [newLeaderboardYear, setNewLeaderboardYear] = useState(new Date().getFullYear())
   const [renamingLeaderboard, setRenamingLeaderboard] = useState(null)
   const [renameLeaderboardName, setRenameLeaderboardName] = useState('')
   const [viewingLeaderboard, setViewingLeaderboard] = useState(null)
@@ -26,9 +28,15 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
       onToast?.("Please enter a leaderboard name", "error")
       return
     }
-    const result = await leaderboardService.createLeaderboard(newLeaderboardName)
+    const result = await leaderboardService.createLeaderboard({
+      name: newLeaderboardName,
+      course: newLeaderboardCourse,
+      year: newLeaderboardYear
+    })
     if (result.success) {
       setNewLeaderboardName('')
+      setNewLeaderboardCourse('devops')
+      setNewLeaderboardYear(new Date().getFullYear())
       setShowLeaderboardModal(false)
       onToast?.("Leaderboard created!")
     } else {
@@ -121,6 +129,10 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
     setShowLeaderboardModal,
     newLeaderboardName,
     setNewLeaderboardName,
+    newLeaderboardCourse,
+    setNewLeaderboardCourse,
+    newLeaderboardYear,
+    setNewLeaderboardYear,
     renamingLeaderboard,
     setRenamingLeaderboard,
     renameLeaderboardName,

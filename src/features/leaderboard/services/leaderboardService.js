@@ -27,10 +27,13 @@ function generateLeaderboardId() {
 
 /**
  * Create a new leaderboard
- * @param {string} name - Leaderboard name
+ * @param {Object} params - Leaderboard parameters
+ * @param {string} params.name - Leaderboard name
+ * @param {string} params.course - Course name (e.g., 'devops', 'devsecops-intro')
+ * @param {number} params.year - Year (e.g., 2024, 2025)
  * @returns {Promise<Object>} - Object with { success: boolean, leaderboardId?: string, error?: string }
  */
-export async function createLeaderboard(name) {
+export async function createLeaderboard({ name, course, year }) {
   try {
     // Validate name
     const validation = validators.leaderboardName(name)
@@ -41,6 +44,22 @@ export async function createLeaderboard(name) {
       }
     }
 
+    // Validate course
+    if (!course || typeof course !== 'string') {
+      return {
+        success: false,
+        error: 'Course is required'
+      }
+    }
+
+    // Validate year
+    if (!year || typeof year !== 'number' || year < 2020 || year > 2100) {
+      return {
+        success: false,
+        error: 'Valid year is required (2020-2100)'
+      }
+    }
+
     // Sanitize name
     const sanitizedName = sanitizeLeaderboardName(name)
 
@@ -48,6 +67,8 @@ export async function createLeaderboard(name) {
     await setDoc(doc(db, 'leaderboards', id), {
       id,
       name: sanitizedName,
+      course,
+      year,
       createdAt: Date.now(),
       players: {}
     })

@@ -90,6 +90,10 @@ export default function App() {
     setShowLeaderboardModal,
     newLeaderboardName,
     setNewLeaderboardName,
+    newLeaderboardCourse,
+    setNewLeaderboardCourse,
+    newLeaderboardYear,
+    setNewLeaderboardYear,
     renamingLeaderboard,
     setRenamingLeaderboard,
     renameLeaderboardName,
@@ -585,7 +589,7 @@ export default function App() {
         )}
         {view === 'dash' && (
           <motion.div key="dash" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <DashboardPage {...{ user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal }} />
+            <DashboardPage {...{ user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, newLeaderboardCourse, setNewLeaderboardCourse, newLeaderboardYear, setNewLeaderboardYear, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal, showToast }} />
           </motion.div>
         )}
         {view === 'edit' && (

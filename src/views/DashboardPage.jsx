@@ -13,12 +13,14 @@ import RenameLeaderboardModal from '@/features/leaderboard/components/RenameLead
 import ViewLeaderboardModal from '@/features/leaderboard/components/ViewLeaderboardModal'
 
 export default function DashboardPage(props) {
-  const { user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal } = props
+  const { user, isAdmin, handleSignInWithGoogle, signOutAdmin, dashTab, setDashTab, showImport, setShowImport, importText, setImportText, handleImport, quizzes, setActiveQuiz, setView, handleLaunch, handleDelete, leaderboards, setShowLeaderboardModal, showLeaderboardModal, newLeaderboardName, setNewLeaderboardName, newLeaderboardCourse, setNewLeaderboardCourse, newLeaderboardYear, setNewLeaderboardYear, createLeaderboard, setViewingLeaderboard, viewingLeaderboard, getLeaderboardPlayers, flushLeaderboard, deleteLeaderboard, renameLeaderboard, renamingLeaderboard, setRenamingLeaderboard, renameLeaderboardName, setRenameLeaderboardName, confirmRenameLeaderboard, launchingQuiz, setLaunchingQuiz, selectedLeaderboard, setSelectedLeaderboard, confirmLaunch, confirmModal, showToast } = props
 
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [courseFilter, setCourseFilter] = useState('all')
   const [expandedLevels, setExpandedLevels] = useState({})
   const [searchQuery, setSearchQuery] = useState('')
+  const [leaderboardCourseFilter, setLeaderboardCourseFilter] = useState('all')
+  const [leaderboardYearFilter, setLeaderboardYearFilter] = useState('all')
 
   // Get unique courses
   const courses = [...new Set(quizzes.map(q => q.course || 'default'))].sort()
@@ -69,6 +71,16 @@ export default function DashboardPage(props) {
   // Expand/collapse all
   const expandAll = () => setExpandedLevels(sortedLevels.reduce((acc, l) => ({ ...acc, [l]: true }), {}))
   const collapseAll = () => setExpandedLevels({})
+
+  // Leaderboard filtering
+  const leaderboardCourses = [...new Set(leaderboards.map(lb => lb.course).filter(Boolean))].sort()
+  const leaderboardYears = [...new Set(leaderboards.map(lb => lb.year).filter(Boolean))].sort((a, b) => b - a)
+
+  const filteredLeaderboards = leaderboards.filter(lb => {
+    if (leaderboardCourseFilter !== 'all' && lb.course !== leaderboardCourseFilter) return false
+    if (leaderboardYearFilter !== 'all' && lb.year !== parseInt(leaderboardYearFilter)) return false
+    return true
+  })
 
   const hasGoogleAuth = user && user.email
   const isAuthorized = hasGoogleAuth && isAdmin
@@ -187,26 +199,72 @@ export default function DashboardPage(props) {
 
       {dashTab === 'leaderboards' && (
         <>
-          <div className="flex justify-end mb-6">
+          <div className="flex justify-between items-center mb-6">
+            {(leaderboardCourses.length > 0 || leaderboardYears.length > 0) && (
+              <div className="flex flex-wrap items-center gap-3">
+                {leaderboardCourses.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 text-sm"><i className="fa fa-book mr-1"></i>Course:</span>
+                    <button
+                      onClick={() => setLeaderboardCourseFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${leaderboardCourseFilter === 'all' ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+                    >
+                      All <span className="ml-1 text-xs opacity-70">{leaderboards.length}</span>
+                    </button>
+                    {leaderboardCourses.map(course => (
+                      <button
+                        key={course}
+                        onClick={() => setLeaderboardCourseFilter(course)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${leaderboardCourseFilter === course ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+                      >
+                        {courseNames[course] || course} <span className="ml-1 text-xs opacity-70">{leaderboards.filter(lb => lb.course === course).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {leaderboardYears.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 text-sm"><i className="fa fa-calendar mr-1"></i>Year:</span>
+                    <button
+                      onClick={() => setLeaderboardYearFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${leaderboardYearFilter === 'all' ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+                    >
+                      All <span className="ml-1 text-xs opacity-70">{leaderboards.length}</span>
+                    </button>
+                    {leaderboardYears.map(year => (
+                      <button
+                        key={year}
+                        onClick={() => setLeaderboardYearFilter(year.toString())}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${leaderboardYearFilter === year.toString() ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}
+                      >
+                        {year} <span className="ml-1 text-xs opacity-70">{leaderboards.filter(lb => lb.year === year).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={() => setShowLeaderboardModal(true)} className="btn-gradient px-6 py-3 rounded-xl font-bold">
               <i className="fa fa-plus mr-2"></i>New Leaderboard
             </button>
           </div>
 
-          {leaderboards.length === 0 ? (
+          {filteredLeaderboards.length === 0 ? (
             <div className="glass rounded-3xl p-16 text-center">
               <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-slate-800 flex items-center justify-center">
                 <i className="fa fa-trophy text-4xl text-slate-600"></i>
               </div>
-              <h3 className="text-2xl font-bold mb-2">No leaderboards yet</h3>
-              <p className="text-slate-500 mb-6">Create a leaderboard to track cumulative scores</p>
-              <button onClick={() => setShowLeaderboardModal(true)} className="btn-gradient px-8 py-3 rounded-xl font-bold">
-                <i className="fa fa-plus mr-2"></i>Create Leaderboard
-              </button>
+              <h3 className="text-2xl font-bold mb-2">{leaderboards.length === 0 ? 'No leaderboards yet' : 'No matching leaderboards'}</h3>
+              <p className="text-slate-500 mb-6">{leaderboards.length === 0 ? 'Create a leaderboard to track cumulative scores' : 'Try adjusting your filters'}</p>
+              {leaderboards.length === 0 && (
+                <button onClick={() => setShowLeaderboardModal(true)} className="btn-gradient px-8 py-3 rounded-xl font-bold">
+                  <i className="fa fa-plus mr-2"></i>Create Leaderboard
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid gap-4">
-              {leaderboards.map((lb, idx) => (
+              {filteredLeaderboards.map((lb, idx) => (
                 <LeaderboardCard
                   key={lb.id}
                   leaderboard={lb}
@@ -227,6 +285,10 @@ export default function DashboardPage(props) {
         isOpen={showLeaderboardModal}
         name={newLeaderboardName}
         setName={setNewLeaderboardName}
+        course={newLeaderboardCourse}
+        setCourse={setNewLeaderboardCourse}
+        year={newLeaderboardYear}
+        setYear={setNewLeaderboardYear}
         onCreate={createLeaderboard}
         onClose={() => {setShowLeaderboardModal(false); setNewLeaderboardName('');}}
       />
