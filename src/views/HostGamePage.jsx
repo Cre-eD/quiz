@@ -10,12 +10,12 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   const [countdown, setCountdown] = useState(3)
   const reactionsContainerRef = useRef(null)
   const processedIdsRef = useRef(new Set())
-  const questionStartTime =
-    session?.questionStartTime ||
-    session?.questionStartTimeFallback ||
-    session?.questionStartMs ||
-    session?.countdownEnd
-  const questionStartMs = toMillis(questionStartTime)
+  const questionStartMs = toMillis(
+    session?.questionStartMs ??
+    session?.countdownEnd ??
+    session?.questionStartTimeFallback ??
+    session?.questionStartTime
+  )
   const shouldForceQuestionPhase =
     gamePhase === 'countdown' &&
     typeof questionStartMs === 'number' &&
@@ -247,7 +247,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         </div>
       </div>
 
-      <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={showQuestionResults} startTime={questionStartTime} />
+      <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={showQuestionResults} startTime={questionStartMs} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>

@@ -10,6 +10,9 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
 
+const COUNTDOWN_DURATION_MS = 3000
+const QUESTION_DURATION_MS = 25000
+
 /**
  * Start a game session (transition to countdown phase)
  * @param {string} pin - Session PIN
@@ -22,12 +25,16 @@ export async function startGame(pin) {
     }
 
     const now = Date.now()
+    const questionStartMs = now + COUNTDOWN_DURATION_MS
     await updateDoc(doc(db, 'sessions', pin), {
       status: 'countdown',
       currentQuestion: 0,
       answers: {},
-      countdownEnd: now + 3000, // 3 seconds from now
+      countdownEnd: questionStartMs,
+      questionStartMs,
+      questionEndMs: questionStartMs + QUESTION_DURATION_MS,
       questionStartTime: null,
+      questionStartTimeFallback: questionStartMs,
       reactions: []
     })
 
@@ -62,12 +69,15 @@ export async function startQuestionTimer(pin) {
 
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
-      // Use server timestamp for accurate sync across all clients
-      // Also provide fallback timestamp for immediate availability
+      const scheduledStartMs = sessionData.questionStartMs || sessionData.countdownEnd || Date.now()
+
+      // Keep scheduled numeric start stable; server timestamp is only informational.
       await updateDoc(sessionRef, {
         status: 'question',
         questionStartTime: serverTimestamp(),
-        questionStartTimeFallback: Date.now()  // Current time as immediate fallback
+        questionStartTimeFallback: scheduledStartMs,
+        questionStartMs: scheduledStartMs,
+        questionEndMs: sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS)
       })
     }
 
@@ -159,12 +169,16 @@ export async function nextQuestion({
 
     // Move to next question with countdown
     const now = Date.now()
+    const questionStartMs = now + COUNTDOWN_DURATION_MS
     await updateDoc(doc(db, 'sessions', pin), {
       status: 'countdown',
       currentQuestion: nextQ,
       answers: {},
-      countdownEnd: now + 3000, // 3 seconds from now
+      countdownEnd: questionStartMs,
+      questionStartMs,
+      questionEndMs: questionStartMs + QUESTION_DURATION_MS,
       questionStartTime: null,
+      questionStartTimeFallback: questionStartMs,
       reactions: [],
       streaks: newStreaks,
       coldStreaks: newColdStreaks

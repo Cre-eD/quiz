@@ -14,12 +14,12 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
-  const questionStartTime =
-    session?.questionStartTime ||
-    session?.questionStartTimeFallback ||
-    session?.questionStartMs ||
-    session?.countdownEnd
-  const questionStartMs = toMillis(questionStartTime)
+  const questionStartMs = toMillis(
+    session?.questionStartMs ??
+    session?.countdownEnd ??
+    session?.questionStartTimeFallback ??
+    session?.questionStartTime
+  )
   const shouldForceQuestionPhase =
     gamePhase === 'countdown' &&
     typeof questionStartMs === 'number' &&
@@ -52,14 +52,14 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
   // Button disable logic - sync with TimerBar
   useEffect(() => {
-    if (effectivePhase !== 'question' || !questionStartTime) {
+    if (effectivePhase !== 'question' || typeof questionStartMs !== 'number') {
       setCanSubmit(true)
       return
     }
 
     // Allow submissions until timer fully expires
     setCanSubmit(true)
-  }, [effectivePhase, questionStartTime, answered])
+  }, [effectivePhase, questionStartMs, answered])
 
 
   if (gamePhase === 'final') {
@@ -216,7 +216,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   return (
     <div className="min-h-screen flex flex-col p-4">
       <div className="mb-4">
-        <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartTime} />
+        <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartMs} />
       </div>
 
       {myStreak >= 2 && (
@@ -249,9 +249,8 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
             onClick={() => {
               if (!canSubmit) return
               haptic.light()
-              // Handle both Firestore Timestamp objects and regular numbers
-              const startTimeMs = questionStartTime?.toMillis ? questionStartTime.toMillis() : questionStartTime
-              const answerTime = Date.now() - startTimeMs
+              if (typeof questionStartMs !== 'number') return
+              const answerTime = Date.now() - questionStartMs
               submitAnswer(idx, answerTime)
             }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}

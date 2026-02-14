@@ -63,7 +63,10 @@ describe('gameService', () => {
           currentQuestion: 0,
           answers: {},
           countdownEnd: expect.any(Number),
+          questionStartMs: expect.any(Number),
+          questionEndMs: expect.any(Number),
           questionStartTime: null,
+          questionStartTimeFallback: expect.any(Number),
           reactions: []
         })
       )
@@ -118,11 +121,13 @@ describe('gameService', () => {
       expect(result.success).toBe(true)
       expect(mockUpdateDoc).toHaveBeenCalledWith(
         expect.anything(),
-        {
+        expect.objectContaining({
           status: 'question',
           questionStartTime: expect.any(Number),
-          questionStartTimeFallback: expect.any(Number)
-        }
+          questionStartTimeFallback: countdownEnd,
+          questionStartMs: countdownEnd,
+          questionEndMs: countdownEnd + 25000
+        })
       )
     })
 
@@ -224,7 +229,10 @@ describe('gameService', () => {
           currentQuestion: 1,
           answers: {},
           countdownEnd: expect.any(Number),
+          questionStartMs: expect.any(Number),
+          questionEndMs: expect.any(Number),
           questionStartTime: null,
+          questionStartTimeFallback: expect.any(Number),
           reactions: []
         })
       )

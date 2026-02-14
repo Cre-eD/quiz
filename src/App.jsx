@@ -446,10 +446,10 @@ export default function App() {
     // Grace period check - allow 3 seconds after timer ends
     // Use fallback if serverTimestamp hasn't resolved yet, and handle Firestore Timestamp objects
     const startTimeRaw =
-      session.questionStartTime ||
-      session.questionStartTimeFallback ||
       session.questionStartMs ||
-      session.countdownEnd
+      session.countdownEnd ||
+      session.questionStartTimeFallback ||
+      session.questionStartTime
     const startTimeMs = startTimeRaw?.toMillis
       ? startTimeRaw.toMillis()
       : startTimeRaw
@@ -627,4 +627,3 @@ export default function App() {
     </div>
   )
 }
-
