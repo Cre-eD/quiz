@@ -29,6 +29,7 @@ export default function DashboardPage(props) {
     'devops-intro': 'DevOps Intro',
     'devops-intro-rus': 'DevOps Intro (RU)',
     'devsecops-intro': 'DevSecOps Intro',
+    'devsecops-intro-rus': 'DevSecOps Intro (RU)',
     'default': 'Other'
   }
 
