@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const {
   mockDoc,
   mockGetDoc,
+  mockSetDoc,
   mockUpdateDoc,
   mockServerTimestamp,
   mockDb
@@ -11,6 +12,7 @@ const {
   return {
     mockDoc: vi.fn(),
     mockGetDoc: vi.fn(),
+    mockSetDoc: vi.fn(),
     mockUpdateDoc: vi.fn(),
     mockServerTimestamp: vi.fn(() => Date.now()),  // Return current timestamp
     mockDb: {}
@@ -20,6 +22,7 @@ const {
 vi.mock('firebase/firestore', () => ({
   doc: (...args) => mockDoc(...args),
   getDoc: (...args) => mockGetDoc(...args),
+  setDoc: (...args) => mockSetDoc(...args),
   updateDoc: (...args) => mockUpdateDoc(...args),
   serverTimestamp: (...args) => mockServerTimestamp(...args)
 }))
@@ -42,6 +45,7 @@ describe('gameService', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     mockDoc.mockReturnValue({ id: 'mock-doc-ref' })
+    mockSetDoc.mockResolvedValue()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 

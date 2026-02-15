@@ -68,6 +68,11 @@ export async function createSession({ quiz, leaderboardId = null, leaderboardNam
     }
 
     await setDoc(doc(db, 'sessions', pin), sessionData)
+    await setDoc(doc(db, 'sessions', pin, 'phase', 'current'), {
+      status: 'lobby',
+      currentQuestion: 0,
+      updatedAt: Date.now()
+    })
 
     return {
       success: true,
@@ -365,6 +370,13 @@ export async function deleteSession(pin) {
       return { success: false, error: 'PIN is required' }
     }
 
+    try {
+      await deleteDoc(doc(db, 'sessions', pin, 'phase', 'current'))
+    } catch (phaseDeleteError) {
+      // The phase doc may already be missing; continue deleting session root.
+      console.warn('Failed to delete phase doc:', phaseDeleteError)
+    }
+
     await deleteDoc(doc(db, 'sessions', pin))
 
     // Clear from localStorage if it matches
@@ -467,6 +479,34 @@ export function subscribeToSession(pin, callback, onError) {
 }
 
 /**
+ * Subscribe to lightweight phase/timer updates for a session
+ * @param {string} pin - Session PIN
+ * @param {Function} callback - Called with (phase) when phase updates
+ * @param {Function} onError - Called with (error) if subscription fails
+ * @returns {Function} - Unsubscribe function
+ */
+export function subscribeToSessionPhase(pin, callback, onError) {
+  if (!pin) {
+    console.error('PIN is required for phase subscription')
+    if (onError) onError(new Error('PIN is required'))
+    return () => {}
+  }
+
+  return onSnapshot(
+    doc(db, 'sessions', pin, 'phase', 'current'),
+    (snap) => {
+      if (snap.exists()) {
+        callback(snap.data())
+      }
+    },
+    (error) => {
+      console.error('Session phase subscription error:', error)
+      if (onError) onError(error)
+    }
+  )
+}
+
+/**
  * Update session fields
  * @param {string} pin - Session PIN
  * @param {Object} updates - Fields to update
@@ -505,5 +545,6 @@ export const sessionService = {
   deleteSession,
   leaveSession,
   subscribeToSession,
+  subscribeToSessionPhase,
   updateSession
 }

@@ -124,12 +124,23 @@ export default function App() {
   const [answered, setAnswered] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
   const [gamePhase, setGamePhase] = useState('lobby')
+  const [phaseState, setPhaseState] = useState({})
   const [reactions, setReactions] = useState([])
   const [badges, setBadges] = useState({})
   const [myReactionCount, setMyReactionCount] = useState(0)
   const [shakeScreen, setShakeScreen] = useState(false)
   const [scorePopKey, setScorePopKey] = useState(0)
   const prevGamePhaseRef = useRef('lobby') // Track previous phase to detect transitions
+  const scoresRef = useRef({})
+  const gamePhaseRef = useRef('lobby')
+
+  useEffect(() => {
+    scoresRef.current = scores
+  }, [scores])
+
+  useEffect(() => {
+    gamePhaseRef.current = gamePhase
+  }, [gamePhase])
 
   // Reaction config
   const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏', '😂', '🤯', '💀', '🎉', '❤️']
@@ -153,15 +164,16 @@ export default function App() {
         session.pin,
         (data) => {
           setSession(data)
-          setGamePhase(data.status || 'lobby')
-          if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
           if (data.reactions) setReactions(data.reactions)
           if (data.badges) setBadges(data.badges)
         },
-        (error) => showToast("Session connection lost", "error")
+        (error) => {
+          setPhaseState({})
+          showToast("Session connection lost", "error")
+        }
       )
     }
   }, [view, session?.pin])
@@ -175,6 +187,7 @@ export default function App() {
           if (data.bannedUsers?.includes(user?.uid)) {
             localStorage.removeItem('quizSession')
             setSession(null)
+            setPhaseState({})
             setView('home')
             setJoinForm({ pin: '', name: '' })
             showToast("You have been removed from the game.", "error")
@@ -182,32 +195,15 @@ export default function App() {
           }
 
           setSession(data)
-          const newPhase = data.status || 'lobby'
-
-          // Use ref to detect phase transitions (avoids stale closure issues)
-          if ((newPhase === 'countdown' || newPhase === 'question') && prevGamePhaseRef.current !== 'countdown' && prevGamePhaseRef.current !== 'question') {
-            setAnswered(false)
-            setPlayerAnswer(null)
-            setMyReactionCount(0) // Reset reaction limit for new question
-          }
-          if (newPhase === 'results') {
+          if (gamePhaseRef.current === 'results') {
             const myScore = data.scores?.[user?.uid] || 0
-            const prevScore = scores[user?.uid] || 0
+            const prevScore = scoresRef.current[user?.uid] || 0
             if (myScore > prevScore) {
               setShowConfetti(true)
               setTimeout(() => setShowConfetti(false), 2000)
             }
           }
 
-          // Transition from lobby to play view (on countdown or question)
-          if ((newPhase === 'countdown' || newPhase === 'question') && prevGamePhaseRef.current === 'lobby') {
-            setView('play-player')
-          }
-
-          // Update ref and state
-          prevGamePhaseRef.current = newPhase
-          setGamePhase(newPhase)
-          if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
@@ -217,6 +213,7 @@ export default function App() {
           // Session deleted or connection lost - clean up and redirect home
           localStorage.removeItem('quizSession')
           setSession(null)
+          setPhaseState({})
           setView('home')
           setJoinForm({ pin: '', name: '' })
           showToast("Quiz session ended by host", "info")
@@ -225,11 +222,62 @@ export default function App() {
     }
   }, [view, session?.pin, user?.uid])
 
+  useEffect(() => {
+    if ((view === 'host' || view === 'play-host') && session?.pin) {
+      return sessionService.subscribeToSessionPhase(
+        session.pin,
+        (data) => {
+          setPhaseState(data || {})
+          const newPhase = data?.status || 'lobby'
+          setGamePhase(newPhase)
+          if (data?.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+        },
+        () => showToast("Session phase connection lost", "error")
+      )
+    }
+  }, [view, session?.pin])
+
+  useEffect(() => {
+    if ((view === 'wait' || view === 'play-player') && session?.pin) {
+      return sessionService.subscribeToSessionPhase(
+        session.pin,
+        (data) => {
+          setPhaseState(data || {})
+          const newPhase = data?.status || 'lobby'
+
+          if (
+            (newPhase === 'countdown' || newPhase === 'question') &&
+            prevGamePhaseRef.current !== 'countdown' &&
+            prevGamePhaseRef.current !== 'question'
+          ) {
+            setAnswered(false)
+            setPlayerAnswer(null)
+            setMyReactionCount(0)
+          }
+
+          if (
+            (newPhase === 'countdown' || newPhase === 'question') &&
+            prevGamePhaseRef.current === 'lobby'
+          ) {
+            setView('play-player')
+          }
+
+          prevGamePhaseRef.current = newPhase
+          setGamePhase(newPhase)
+          if (data?.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+        },
+        () => showToast("Session phase connection lost", "error")
+      )
+    }
+  }, [view, session?.pin])
+
 
   const handleLaunch = (quiz) => {
     setLaunchingQuiz(quiz)
     setSelectedLeaderboard(null)
   }
+
+  const effectiveSession = session ? { ...session, ...phaseState } : session
 
   const confirmLaunch = async () => {
     if (!launchingQuiz) return
@@ -241,6 +289,13 @@ export default function App() {
     })
     if (result.success) {
       setSession(result.session)
+      setPhaseState({
+        status: result.session.status || 'lobby',
+        currentQuestion: result.session.currentQuestion || 0,
+        countdownEnd: result.session.countdownEnd || null,
+        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
+        questionEndMs: result.session.questionEndMs || null
+      })
       setScores({})
       setStreaks({})
       setColdStreaks({})
@@ -286,6 +341,13 @@ export default function App() {
 
     if (result.success) {
       setSession(result.session)
+      setPhaseState({
+        status: result.session.status || 'lobby',
+        currentQuestion: result.session.currentQuestion || 0,
+        countdownEnd: result.session.countdownEnd || null,
+        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
+        questionEndMs: result.session.questionEndMs || null
+      })
       setScores(result.session.scores || {})
 
       if (result.session.status !== 'lobby') {
@@ -309,6 +371,13 @@ export default function App() {
 
     if (result.success) {
       setSession(result.session)
+      setPhaseState({
+        status: result.session.status || 'lobby',
+        currentQuestion: result.session.currentQuestion || 0,
+        countdownEnd: result.session.countdownEnd || null,
+        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
+        questionEndMs: result.session.questionEndMs || null
+      })
       setScores(result.session.scores || {})
       setJoinForm({ pin: result.pin, name: result.name })
 
@@ -377,6 +446,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseState({})
       setView('dash')
     } else {
       showToast(result.error || "Failed to cancel session", "error")
@@ -409,6 +479,7 @@ export default function App() {
     setMyReactionCount(0)
     setCurrentQuestion(0)
     setGamePhase('lobby')
+    setPhaseState({})
     prevGamePhaseRef.current = 'lobby'
     setView('home')
 
@@ -426,6 +497,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseState({})
       setView('dash')
       showToast("Quiz stopped", "info")
     } else {
@@ -441,6 +513,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseState({})
       setView('dash')
       showToast("Session ended")
     } else {
@@ -482,10 +555,10 @@ export default function App() {
     // Grace period check - allow 3 seconds after timer ends
     // Use fallback if serverTimestamp hasn't resolved yet, and handle Firestore Timestamp objects
     const startTimeRaw =
-      session.questionStartMs ||
-      session.countdownEnd ||
-      session.questionStartTimeFallback ||
-      session.questionStartTime
+      effectiveSession?.questionStartMs ||
+      effectiveSession?.countdownEnd ||
+      effectiveSession?.questionStartTimeFallback ||
+      effectiveSession?.questionStartTime
     const startTimeMs = startTimeRaw?.toMillis
       ? startTimeRaw.toMillis()
       : startTimeRaw
@@ -639,12 +712,12 @@ export default function App() {
         )}
         {view === 'host' && (
           <motion.div key="host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HostLobbyPage {...{ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, cancelSession }} />
+            <HostLobbyPage {...{ user, isAdmin, setView, session: effectiveSession, startGame, toggleLateJoin, kickPlayer, cancelSession }} />
           </motion.div>
         )}
         {view === 'play-host' && (
           <motion.div key="play-host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HostGamePage {...{ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }} />
+            <HostGamePage {...{ user, isAdmin, setView, session: effectiveSession, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }} />
           </motion.div>
         )}
         {view === 'wait' && (
@@ -654,7 +727,7 @@ export default function App() {
         )}
         {view === 'play-player' && (
           <motion.div key="play-player" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <PlayerGamePage {...{ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession: leavePlayerSession }} />
+            <PlayerGamePage {...{ session: effectiveSession, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession: leavePlayerSession }} />
           </motion.div>
         )}
       </AnimatePresence>

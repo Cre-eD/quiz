@@ -6,7 +6,7 @@
  * Complex scoring logic remains in App.jsx and can be extracted to utils in future phases.
  */
 
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
 
@@ -37,6 +37,18 @@ export async function startGame(pin) {
       questionStartTimeFallback: questionStartMs,
       reactions: []
     })
+    await setDoc(
+      doc(db, 'sessions', pin, 'phase', 'current'),
+      {
+        status: 'countdown',
+        currentQuestion: 0,
+        countdownEnd: questionStartMs,
+        questionStartMs,
+        questionEndMs: questionStartMs + QUESTION_DURATION_MS,
+        updatedAt: Date.now()
+      },
+      { merge: true }
+    )
 
     return { success: true }
   } catch (error) {
@@ -79,6 +91,18 @@ export async function startQuestionTimer(pin) {
         questionStartMs: scheduledStartMs,
         questionEndMs: sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS)
       })
+      await setDoc(
+        doc(db, 'sessions', pin, 'phase', 'current'),
+        {
+          status: 'question',
+          currentQuestion: sessionData.currentQuestion ?? 0,
+          countdownEnd: sessionData.countdownEnd ?? scheduledStartMs,
+          questionStartMs: scheduledStartMs,
+          questionEndMs: sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS),
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      )
     }
 
     return { success: true }
@@ -105,6 +129,14 @@ export async function showQuestionResults(pin) {
     await updateDoc(doc(db, 'sessions', pin), {
       status: 'results'
     })
+    await setDoc(
+      doc(db, 'sessions', pin, 'phase', 'current'),
+      {
+        status: 'results',
+        updatedAt: Date.now()
+      },
+      { merge: true }
+    )
 
     return { success: true }
   } catch (error) {
@@ -164,6 +196,15 @@ export async function nextQuestion({
         streaks: newStreaks,
         coldStreaks: newColdStreaks
       })
+      await setDoc(
+        doc(db, 'sessions', pin, 'phase', 'current'),
+        {
+          status: 'final',
+          currentQuestion,
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      )
       return { success: true, isFinal: true }
     }
 
@@ -183,6 +224,18 @@ export async function nextQuestion({
       streaks: newStreaks,
       coldStreaks: newColdStreaks
     })
+    await setDoc(
+      doc(db, 'sessions', pin, 'phase', 'current'),
+      {
+        status: 'countdown',
+        currentQuestion: nextQ,
+        countdownEnd: questionStartMs,
+        questionStartMs,
+        questionEndMs: questionStartMs + QUESTION_DURATION_MS,
+        updatedAt: Date.now()
+      },
+      { merge: true }
+    )
 
     return { success: true, isFinal: false }
   } catch (error) {
