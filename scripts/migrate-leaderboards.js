@@ -6,12 +6,27 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, getDocs, updateDoc, doc } from 'firebase/firestore'
 
+const requiredEnv = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_APP_ID'
+]
+
+const missingEnv = requiredEnv.filter((name) => !process.env[name])
+if (missingEnv.length > 0) {
+  console.error('❌ Missing required environment variables:')
+  missingEnv.forEach((name) => console.error(`   - ${name}`))
+  console.error('\nSet them before running this script.')
+  process.exit(1)
+}
+
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: 'AIzaSyCKtogNq4zoiAd6dGa16nerndhKj3iA7Hs',
-  authDomain: 'devops-quiz-2c930.firebaseapp.com',
-  projectId: 'devops-quiz-2c930',
-  appId: '1:86349315764:web:2f579516f90219ed20a1e1'
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID
 }
 
 const app = initializeApp(firebaseConfig)

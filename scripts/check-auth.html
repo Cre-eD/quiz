@@ -6,11 +6,23 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
 
+    // Never commit real credentials in this file.
+    // Paste your project values here locally when needed.
     const firebaseConfig = {
-      apiKey: "AIzaSyCKtogNq4zoiAd6dGa16nerndhKj3iA7Hs",
-      authDomain: "devops-quiz-2c930.firebaseapp.com",
-      projectId: "devops-quiz-2c930",
-      appId: "1:86349315764:web:2f579516f90219ed20a1e1"
+      apiKey: "REPLACE_ME",
+      authDomain: "REPLACE_ME",
+      projectId: "REPLACE_ME",
+      appId: "REPLACE_ME"
+    }
+
+    const hasPlaceholder = Object.values(firebaseConfig).some((value) => value === 'REPLACE_ME')
+    if (hasPlaceholder) {
+      const output = document.getElementById('output')
+      output.innerHTML = `
+        <h2 style="color: #b45309">⚠️ Configure firebaseConfig first</h2>
+        <p>Edit <code>scripts/check-auth.html</code> locally and set real values before using this debugger.</p>
+      `
+      throw new Error('Firebase config placeholders detected')
     }
 
     const app = initializeApp(firebaseConfig)

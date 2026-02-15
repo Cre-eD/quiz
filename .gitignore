@@ -27,6 +27,8 @@ lib-cov/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.production.local
 *.env
 service-account.json
 serviceAccountKey.json

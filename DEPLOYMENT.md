@@ -4,13 +4,20 @@
 
 ### Important: Environment Configuration
 
-The project uses two environment files:
-- `.env` - Production configuration (connects to Firebase production)
+The project uses environment files:
+- `.env.production` - Production configuration (local only, never committed)
 - `.env.local` - Local development configuration (connects to Firebase Emulator)
 
-**Issue**: Vite prioritizes `.env.local` over `.env` during builds, which can cause production builds to mistakenly connect to localhost emulators.
+**Issue**: Vite prioritizes `.env.local` over `.env.production` during builds, which can cause production builds to mistakenly connect to localhost emulators.
 
 ### Recommended Deployment Method
+
+Create local production env first:
+
+```bash
+cp .env.production.example .env.production
+# fill in real values locally
+```
 
 Use the dedicated production deployment script:
 
@@ -20,7 +27,7 @@ npm run deploy:prod
 
 This script automatically:
 1. Temporarily moves `.env.local` out of the way
-2. Builds with production configuration (`.env`)
+2. Builds with production configuration (`.env.production`)
 3. Deploys to Firebase
 4. Restores `.env.local` for local development
 
@@ -56,7 +63,7 @@ npm run deploy
 
 ### Environment Variables
 
-**.env (Production)**
+**.env.production (Production - local only)**
 ```bash
 VITE_FIREBASE_API_KEY=<production-api-key>
 VITE_FIREBASE_AUTH_DOMAIN=<project>.firebaseapp.com

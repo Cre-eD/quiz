@@ -1,6 +1,6 @@
 #!/bin/bash
 # Production deployment script
-# Ensures .env.local doesn't override production .env during build
+# Ensures .env.local doesn't override production .env.production during build
 
 set -e  # Exit on error
 
@@ -12,7 +12,7 @@ if [ -f .env.local ]; then
   mv .env.local .env.local.temp
   RESTORED=false
 else
-  echo "ℹ️  No .env.local found, proceeding with .env"
+  echo "ℹ️  No .env.local found, proceeding with .env.production"
   RESTORED=true
 fi
 
