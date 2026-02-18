@@ -16,6 +16,85 @@ const getNextPhaseSeq = (sessionData) => {
   const current = Number.isFinite(sessionData?.phaseSeq) ? sessionData.phaseSeq : 0
   return current + 1
 }
+const FIRST_BLOOD_BONUS_POINTS = 30
+const FALLBACK_ANSWER_TIME_MS = QUESTION_DURATION_MS + 3000
+
+const toValidAnswerTime = (value) => {
+  if (!Number.isFinite(value)) {
+    return FALLBACK_ANSWER_TIME_MS
+  }
+  return Math.max(0, Math.min(value, FALLBACK_ANSWER_TIME_MS))
+}
+
+const toTimestampForTieBreak = (value) => (Number.isFinite(value) ? value : Number.POSITIVE_INFINITY)
+
+function buildQuestionFairnessUpdates(sessionData) {
+  const questionIndex = sessionData?.currentQuestion ?? 0
+  const question = sessionData?.quiz?.questions?.[questionIndex]
+  const correctIndex = question?.correct
+
+  if (!Number.isFinite(correctIndex)) {
+    return {
+      fairStats: sessionData?.fairStats || {},
+      scores: sessionData?.scores || {},
+      badges: sessionData?.badges || {},
+      firstBloodWinnerUid: null
+    }
+  }
+
+  const fairStats = { ...(sessionData?.fairStats || {}) }
+  const scores = { ...(sessionData?.scores || {}) }
+  const badges = { ...(sessionData?.badges || {}) }
+  const answers = sessionData?.answers || {}
+  const correctEntries = []
+
+  Object.entries(answers).forEach(([uid, answer]) => {
+    if (!answer || answer.answerIndex !== correctIndex) {
+      return
+    }
+
+    const answerTime = toValidAnswerTime(answer.answerTime)
+    const timestamp = toTimestampForTieBreak(answer.timestamp)
+    correctEntries.push({ uid, answerTime, timestamp })
+
+    const currentStats = fairStats[uid] || {}
+    fairStats[uid] = {
+      correctAnswers: (currentStats.correctAnswers || 0) + 1,
+      totalCorrectTimeMs: (currentStats.totalCorrectTimeMs || 0) + answerTime,
+      firstBloodWins: currentStats.firstBloodWins || 0
+    }
+  })
+
+  if (correctEntries.length === 0) {
+    return { fairStats, scores, badges, firstBloodWinnerUid: null }
+  }
+
+  const firstBloodWinner = correctEntries.sort((a, b) => {
+    if (a.answerTime !== b.answerTime) return a.answerTime - b.answerTime
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+    return a.uid.localeCompare(b.uid)
+  })[0]
+
+  const winnerUid = firstBloodWinner.uid
+  const winnerStats = fairStats[winnerUid] || {}
+  fairStats[winnerUid] = {
+    correctAnswers: winnerStats.correctAnswers || 0,
+    totalCorrectTimeMs: winnerStats.totalCorrectTimeMs || 0,
+    firstBloodWins: (winnerStats.firstBloodWins || 0) + 1
+  }
+  scores[winnerUid] = (scores[winnerUid] || 0) + FIRST_BLOOD_BONUS_POINTS
+  badges[winnerUid] = {
+    ...(badges[winnerUid] || {}),
+    firstBlood: true
+  }
+
+  return {
+    fairStats,
+    scores,
+    badges,
+    firstBloodWinnerUid: winnerUid
+  }
+}
 
 /**
  * Start a game session (transition to countdown phase)
@@ -167,12 +246,27 @@ export async function showQuestionResults(pin) {
     }
 
     const sessionData = sessionSnap.data()
+    if (sessionData.status !== 'question') {
+      return { success: true }
+    }
+
+    const {
+      fairStats,
+      scores,
+      badges,
+      firstBloodWinnerUid
+    } = buildQuestionFairnessUpdates(sessionData)
     const phaseSeq = getNextPhaseSeq(sessionData)
     const batch = writeBatch(db)
 
     batch.update(sessionRef, {
       status: 'results',
-      phaseSeq
+      phaseSeq,
+      fairStats,
+      scores,
+      badges,
+      lastScoredQuestion: sessionData.currentQuestion ?? 0,
+      firstBloodWinnerUid: firstBloodWinnerUid || null
     })
 
     batch.set(

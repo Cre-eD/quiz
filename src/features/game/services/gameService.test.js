@@ -194,10 +194,36 @@ describe('gameService', () => {
   })
 
   describe('showQuestionResults', () => {
-    it('should show results successfully', async () => {
+    it('should show results successfully and apply first-blood updates', async () => {
       mockGetDoc.mockResolvedValue({
         exists: () => true,
-        data: () => ({ currentQuestion: 1, phaseSeq: 4 })
+        data: () => ({
+          status: 'question',
+          currentQuestion: 1,
+          phaseSeq: 4,
+          quiz: {
+            questions: [
+              { correct: 0 },
+              { correct: 2 }
+            ]
+          },
+          answers: {
+            'user-fast': { answerIndex: 2, answerTime: 1200, timestamp: 1000 },
+            'user-slow': { answerIndex: 2, answerTime: 1800, timestamp: 900 },
+            'user-wrong': { answerIndex: 1, answerTime: 800, timestamp: 850 }
+          },
+          scores: {
+            'user-fast': 200,
+            'user-slow': 200,
+            'user-wrong': 100
+          },
+          fairStats: {
+            'user-fast': { correctAnswers: 1, totalCorrectTimeMs: 1500, firstBloodWins: 0 }
+          },
+          badges: {
+            'user-slow': { speedDemon: true }
+          }
+        })
       })
 
       const result = await showQuestionResults('1234')
@@ -205,9 +231,44 @@ describe('gameService', () => {
       expect(result.success).toBe(true)
       expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ status: 'results', phaseSeq: 5 })
+        expect.objectContaining({
+          status: 'results',
+          phaseSeq: 5,
+          lastScoredQuestion: 1,
+          firstBloodWinnerUid: 'user-fast',
+          scores: {
+            'user-fast': 230,
+            'user-slow': 200,
+            'user-wrong': 100
+          },
+          fairStats: {
+            'user-fast': { correctAnswers: 2, totalCorrectTimeMs: 2700, firstBloodWins: 1 },
+            'user-slow': { correctAnswers: 1, totalCorrectTimeMs: 1800, firstBloodWins: 0 }
+          },
+          badges: {
+            'user-slow': { speedDemon: true },
+            'user-fast': { firstBlood: true }
+          }
+        })
       )
       expect(mockBatchCommit).toHaveBeenCalled()
+    })
+
+    it('should no-op when session is not in question phase', async () => {
+      mockGetDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          status: 'results',
+          currentQuestion: 1,
+          phaseSeq: 4
+        })
+      })
+
+      const result = await showQuestionResults('1234')
+
+      expect(result.success).toBe(true)
+      expect(mockBatchUpdate).not.toHaveBeenCalled()
+      expect(mockBatchCommit).not.toHaveBeenCalled()
     })
 
     it('should reject missing PIN', async () => {

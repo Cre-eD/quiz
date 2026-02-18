@@ -6,6 +6,7 @@ import { syncServerClock } from './features/session/services/timeSyncService'
 import { useAuth } from './features/auth/hooks/useAuth'
 import { useQuizzes } from './features/quiz/hooks/useQuizzes'
 import { useLeaderboards } from './features/leaderboard/hooks/useLeaderboards'
+import { compareLiveLeaderboardPlayers } from './features/leaderboard/utils/ranking'
 import { optionColors, categoryConfig } from './constants'
 import { haptic } from './utils/haptic'
 import Spinner from './components/Spinner'
@@ -639,7 +640,12 @@ export default function App() {
 
   const endGame = async () => {
     if (session?.leaderboardId && session?.players && session?.scores) {
-      await saveToLeaderboard(session.leaderboardId, session.players, session.scores)
+      await saveToLeaderboard(
+        session.leaderboardId,
+        session.players,
+        session.scores,
+        session.fairStats || {}
+      )
       showToast(`Scores saved to ${session.leaderboardName}!`)
     }
     const result = await sessionService.deleteSession(session.pin)
@@ -748,14 +754,6 @@ export default function App() {
     const newBadges = { ...(badges[user.uid] || {}) }
     const totalQuestions = session.quiz.questions.length
 
-    // First Blood - first correct answer in the question
-    const isFirstCorrect = Object.values(session.answers || {}).filter(a =>
-      a.answerIndex === question.correct
-    ).length === 0
-    if (isCorrect && isFirstCorrect) {
-      newBadges.firstBlood = true
-    }
-
     // Speed Demon - answered correctly in under 3 seconds
     if (isCorrect && answerTime && answerTime < 3000) {
       newBadges.speedDemon = true
@@ -803,12 +801,13 @@ export default function App() {
   }
 
   const leaderboard = Object.entries(scores)
-    .map(([uid, score]) => ({ uid, score, name: session?.players?.[uid] || 'Unknown' }))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score
-      // Stable tie-breaker: alphabetical by name
-      return a.name.localeCompare(b.name)
-    })
+    .map(([uid, score]) => ({
+      uid,
+      score,
+      name: session?.players?.[uid] || 'Unknown',
+      fairStats: session?.fairStats?.[uid] || {}
+    }))
+    .sort(compareLiveLeaderboardPlayers)
 
 
   // Render

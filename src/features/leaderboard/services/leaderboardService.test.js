@@ -311,7 +311,10 @@ describe('leaderboardService', () => {
           displayName: 'Alice',
           totalScore: 500,
           quizzesTaken: 2,
-          lastPlayed: 1000000
+          lastPlayed: 1000000,
+          totalCorrectAnswers: 7,
+          totalCorrectTimeMs: 21000,
+          firstBloodWins: 2
         }
       }
     }
@@ -326,21 +329,27 @@ describe('leaderboardService', () => {
       const result = await saveScoresToLeaderboard({
         leaderboardId: 'lb-123',
         sessionPlayers: { 'user-1': 'Bob' },
-        sessionScores: { 'user-1': 300 }
+        sessionScores: { 'user-1': 300 },
+        sessionFairStats: {
+          'user-1': { correctAnswers: 4, totalCorrectTimeMs: 9800, firstBloodWins: 1 }
+        }
       })
 
       expect(result.success).toBe(true)
       expect(mockUpdateDoc).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          players: {
-            'bob': {
+          players: expect.objectContaining({
+            'bob': expect.objectContaining({
               displayName: 'Bob',
               totalScore: 300,
               quizzesTaken: 1,
-              lastPlayed: expect.any(Number)
-            }
-          }
+              lastPlayed: expect.any(Number),
+              totalCorrectAnswers: 4,
+              totalCorrectTimeMs: 9800,
+              firstBloodWins: 1
+            })
+          })
         })
       )
     })
@@ -355,7 +364,10 @@ describe('leaderboardService', () => {
       const result = await saveScoresToLeaderboard({
         leaderboardId: 'lb-123',
         sessionPlayers: { 'user-1': 'Alice' },
-        sessionScores: { 'user-1': 400 }
+        sessionScores: { 'user-1': 400 },
+        sessionFairStats: {
+          'user-1': { correctAnswers: 3, totalCorrectTimeMs: 7000, firstBloodWins: 1 }
+        }
       })
 
       expect(result.success).toBe(true)
@@ -365,7 +377,10 @@ describe('leaderboardService', () => {
           players: expect.objectContaining({
             'alice': expect.objectContaining({
               totalScore: 900, // 500 + 400
-              quizzesTaken: 3 // 2 + 1
+              quizzesTaken: 3, // 2 + 1
+              totalCorrectAnswers: 10, // 7 + 3
+              totalCorrectTimeMs: 28000, // 21000 + 7000
+              firstBloodWins: 3 // 2 + 1
             })
           })
         })
@@ -413,6 +428,29 @@ describe('leaderboardService', () => {
       const updateCall = mockUpdateDoc.mock.calls[0][1]
       expect(updateCall.players['alice']).toBeDefined()
       expect(updateCall.players['alice'].displayName).toBe('ALICE')
+    })
+
+    it('should default fairness stats when not provided', async () => {
+      mockGetDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ players: {} })
+      })
+      mockUpdateDoc.mockResolvedValue()
+
+      await saveScoresToLeaderboard({
+        leaderboardId: 'lb-123',
+        sessionPlayers: { 'user-1': 'Dana' },
+        sessionScores: { 'user-1': 250 }
+      })
+
+      const updateCall = mockUpdateDoc.mock.calls[0][1]
+      expect(updateCall.players['dana']).toEqual(
+        expect.objectContaining({
+          totalCorrectAnswers: 0,
+          totalCorrectTimeMs: 0,
+          firstBloodWins: 0
+        })
+      )
     })
 
     it('should reject missing leaderboard ID', async () => {

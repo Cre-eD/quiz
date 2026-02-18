@@ -25,6 +25,17 @@ function generateLeaderboardId() {
   return generateSecureId(11)
 }
 
+const toNonNegativeNumber = (value) => (Number.isFinite(value) && value > 0 ? value : 0)
+
+const getSessionFairStatsForPlayer = (sessionFairStats, uid) => {
+  const playerStats = sessionFairStats?.[uid] || {}
+  return {
+    correctAnswers: toNonNegativeNumber(playerStats.correctAnswers),
+    totalCorrectTimeMs: toNonNegativeNumber(playerStats.totalCorrectTimeMs),
+    firstBloodWins: toNonNegativeNumber(playerStats.firstBloodWins)
+  }
+}
+
 /**
  * Create a new leaderboard
  * @param {Object} params - Leaderboard parameters
@@ -176,9 +187,10 @@ export async function deleteLeaderboard(leaderboardId) {
  * @param {string} params.leaderboardId - Leaderboard ID
  * @param {Object} params.sessionPlayers - Session players { uid: displayName }
  * @param {Object} params.sessionScores - Session scores { uid: score }
+ * @param {Object} params.sessionFairStats - Session fairness stats { uid: { correctAnswers, totalCorrectTimeMs, firstBloodWins } }
  * @returns {Promise<Object>} - Object with { success: boolean, error?: string }
  */
-export async function saveScoresToLeaderboard({ leaderboardId, sessionPlayers, sessionScores }) {
+export async function saveScoresToLeaderboard({ leaderboardId, sessionPlayers, sessionScores, sessionFairStats = {} }) {
   try {
     if (!leaderboardId) {
       return { success: false, error: 'Leaderboard ID is required' }
@@ -199,22 +211,38 @@ export async function saveScoresToLeaderboard({ leaderboardId, sessionPlayers, s
 
     // Merge session scores with existing leaderboard scores
     Object.entries(sessionPlayers).forEach(([uid, displayName]) => {
-      const nameKey = displayName.toLowerCase().trim()
-      const sessionScore = sessionScores[uid] || 0
+      const normalizedDisplayName =
+        typeof displayName === 'string' && displayName.trim().length > 0
+          ? displayName.trim()
+          : 'Unknown'
+      const nameKey = normalizedDisplayName.toLowerCase()
+      const sessionScore = toNonNegativeNumber(sessionScores[uid])
+      const fairStats = getSessionFairStatsForPlayer(sessionFairStats, uid)
 
       if (existingPlayers[nameKey]) {
         // Update existing player
-        existingPlayers[nameKey].totalScore += sessionScore
-        existingPlayers[nameKey].quizzesTaken += 1
+        existingPlayers[nameKey].totalScore =
+          toNonNegativeNumber(existingPlayers[nameKey].totalScore) + sessionScore
+        existingPlayers[nameKey].quizzesTaken =
+          toNonNegativeNumber(existingPlayers[nameKey].quizzesTaken) + 1
+        existingPlayers[nameKey].totalCorrectAnswers =
+          toNonNegativeNumber(existingPlayers[nameKey].totalCorrectAnswers) + fairStats.correctAnswers
+        existingPlayers[nameKey].totalCorrectTimeMs =
+          toNonNegativeNumber(existingPlayers[nameKey].totalCorrectTimeMs) + fairStats.totalCorrectTimeMs
+        existingPlayers[nameKey].firstBloodWins =
+          toNonNegativeNumber(existingPlayers[nameKey].firstBloodWins) + fairStats.firstBloodWins
         existingPlayers[nameKey].lastPlayed = Date.now()
-        existingPlayers[nameKey].displayName = displayName
+        existingPlayers[nameKey].displayName = normalizedDisplayName
       } else {
         // Add new player
         existingPlayers[nameKey] = {
-          displayName,
+          displayName: normalizedDisplayName,
           totalScore: sessionScore,
           quizzesTaken: 1,
-          lastPlayed: Date.now()
+          lastPlayed: Date.now(),
+          totalCorrectAnswers: fairStats.correctAnswers,
+          totalCorrectTimeMs: fairStats.totalCorrectTimeMs,
+          firstBloodWins: fairStats.firstBloodWins
         }
       }
     })

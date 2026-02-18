@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { leaderboardService } from '../services/leaderboardService'
+import { comparePersistentLeaderboardPlayers } from '../utils/ranking'
 
 export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm }) {
   const [leaderboards, setLeaderboards] = useState([])
@@ -101,12 +102,13 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
     }
   }
 
-  const saveToLeaderboard = async (leaderboardId, sessionPlayers, sessionScores) => {
+  const saveToLeaderboard = async (leaderboardId, sessionPlayers, sessionScores, sessionFairStats = {}) => {
     if (!leaderboardId) return
     const result = await leaderboardService.saveScoresToLeaderboard({
       leaderboardId,
       sessionPlayers,
-      sessionScores
+      sessionScores,
+      sessionFairStats
     })
     if (!result.success) {
       console.error('Failed to save to leaderboard:', result.error)
@@ -117,7 +119,7 @@ export function useLeaderboards({ user, isAdmin, isActive, onToast, onConfirm })
     if (!lb?.players) return []
     return Object.entries(lb.players)
       .map(([key, data]) => ({ key, ...data }))
-      .sort((a, b) => b.totalScore - a.totalScore)
+      .sort(comparePersistentLeaderboardPlayers)
       .slice(0, 20)
   }
 
