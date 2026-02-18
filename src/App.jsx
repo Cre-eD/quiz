@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { sessionService } from './features/session/services/sessionService'
 import { gameService } from './features/game/services/gameService'
+import { syncServerClock } from './features/session/services/timeSyncService'
 import { useAuth } from './features/auth/hooks/useAuth'
 import { useQuizzes } from './features/quiz/hooks/useQuizzes'
 import { useLeaderboards } from './features/leaderboard/hooks/useLeaderboards'
@@ -11,7 +12,6 @@ import Spinner from './components/Spinner'
 import ConfirmModal from './components/ConfirmModal'
 import Toast from './components/Toast'
 import Confetti from './components/Confetti'
-import TimerBar from './components/TimerBar'
 import HomePage from './views/HomePage'
 import PlayerWaitPage from './views/PlayerWaitPage'
 import QuizEditorPage from './views/QuizEditorPage'
@@ -19,6 +19,7 @@ import HostLobbyPage from './views/HostLobbyPage'
 import HostGamePage from './views/HostGamePage'
 import PlayerGamePage from './views/PlayerGamePage'
 import DashboardPage from './views/DashboardPage'
+import { getQuestionEndMs } from './features/game/utils/timeline'
 
 // Page transition variants
 const pageVariants = {
@@ -125,6 +126,8 @@ export default function App() {
   const [showConfetti, setShowConfetti] = useState(false)
   const [gamePhase, setGamePhase] = useState('lobby')
   const [phaseState, setPhaseState] = useState({})
+  const [phaseChannelHealthy, setPhaseChannelHealthy] = useState(false)
+  const [clockOffsetMs, setClockOffsetMs] = useState(0)
   const [reactions, setReactions] = useState([])
   const [badges, setBadges] = useState({})
   const [myReactionCount, setMyReactionCount] = useState(0)
@@ -133,6 +136,9 @@ export default function App() {
   const prevGamePhaseRef = useRef('lobby') // Track previous phase to detect transitions
   const scoresRef = useRef({})
   const gamePhaseRef = useRef('lobby')
+  const phaseChannelHealthyRef = useRef(false)
+  const lastPhaseSeqRef = useRef(-1)
+  const clockOffsetRef = useRef(0)
 
   useEffect(() => {
     scoresRef.current = scores
@@ -141,6 +147,60 @@ export default function App() {
   useEffect(() => {
     gamePhaseRef.current = gamePhase
   }, [gamePhase])
+
+  useEffect(() => {
+    phaseChannelHealthyRef.current = phaseChannelHealthy
+  }, [phaseChannelHealthy])
+
+  useEffect(() => {
+    if (session?.pin) {
+      setPhaseChannelHealthy(false)
+    }
+  }, [session?.pin])
+
+  useEffect(() => {
+    clockOffsetRef.current = clockOffsetMs
+  }, [clockOffsetMs])
+
+  useEffect(() => {
+    lastPhaseSeqRef.current = -1
+  }, [session?.pin])
+
+  const getNowMs = () => Date.now() + clockOffsetRef.current
+
+  const toPhaseState = (data, fallbackStatus = 'lobby') => ({
+    status: data?.status || fallbackStatus,
+    currentQuestion: data?.currentQuestion ?? 0,
+    countdownEnd: data?.countdownEnd ?? null,
+    questionStartMs: data?.questionStartMs ?? data?.questionStartTimeFallback ?? null,
+    questionEndMs: data?.questionEndMs ?? null,
+    phaseSeq: Number.isFinite(data?.phaseSeq) ? data.phaseSeq : null
+  })
+
+  const shouldAcceptPhaseUpdate = (data) => {
+    const incomingSeq = Number.isFinite(data?.phaseSeq) ? data.phaseSeq : null
+    if (incomingSeq === null) {
+      return true
+    }
+    if (incomingSeq < lastPhaseSeqRef.current) {
+      return false
+    }
+    lastPhaseSeqRef.current = incomingSeq
+    return true
+  }
+
+  const syncClock = async (options = {}) => {
+    if (!user?.uid) {
+      return { success: false, error: 'User not available' }
+    }
+
+    const result = await syncServerClock(user.uid, options)
+    if (result.success && Number.isFinite(result.offsetMs)) {
+      clockOffsetRef.current = result.offsetMs
+      setClockOffsetMs(result.offsetMs)
+    }
+    return result
+  }
 
   // Reaction config
   const reactionEmojis = ['🔥', '😎', '🤔', '😰', '👏', '😂', '🤯', '💀', '🎉', '❤️']
@@ -155,6 +215,28 @@ export default function App() {
     perfectGame: { icon: '👑', name: 'Perfect Game', desc: 'All answers correct' }
   }
 
+  useEffect(() => {
+    if (!user?.uid || !session?.pin) return
+
+    let cancelled = false
+    const runSync = async () => {
+      const result = await syncServerClock(user.uid, { samples: 3 })
+      if (cancelled || !result.success || !Number.isFinite(result.offsetMs)) {
+        return
+      }
+      clockOffsetRef.current = result.offsetMs
+      setClockOffsetMs(result.offsetMs)
+    }
+
+    runSync()
+    const interval = setInterval(runSync, 120000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [user?.uid, session?.pin])
+
 
 
   // Session listeners
@@ -163,7 +245,17 @@ export default function App() {
       return sessionService.subscribeToSession(
         session.pin,
         (data) => {
+          if (!phaseChannelHealthyRef.current && !shouldAcceptPhaseUpdate(data)) {
+            return
+          }
+
           setSession(data)
+          if (!phaseChannelHealthyRef.current) {
+            const fallbackPhase = data.status || 'lobby'
+            setGamePhase(fallbackPhase)
+            if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+            setPhaseState(toPhaseState(data, fallbackPhase))
+          }
           if (data.scores) setScores(data.scores)
           if (data.streaks) setStreaks(data.streaks)
           if (data.coldStreaks) setColdStreaks(data.coldStreaks)
@@ -171,6 +263,7 @@ export default function App() {
           if (data.badges) setBadges(data.badges)
         },
         (error) => {
+          setPhaseChannelHealthy(false)
           setPhaseState({})
           showToast("Session connection lost", "error")
         }
@@ -187,6 +280,7 @@ export default function App() {
           if (data.bannedUsers?.includes(user?.uid)) {
             localStorage.removeItem('quizSession')
             setSession(null)
+            setPhaseChannelHealthy(false)
             setPhaseState({})
             setView('home')
             setJoinForm({ pin: '', name: '' })
@@ -194,7 +288,35 @@ export default function App() {
             return
           }
 
+          if (!phaseChannelHealthyRef.current && !shouldAcceptPhaseUpdate(data)) {
+            return
+          }
+
           setSession(data)
+          if (!phaseChannelHealthyRef.current) {
+            const newPhase = data.status || 'lobby'
+            if (
+              (newPhase === 'countdown' || newPhase === 'question') &&
+              prevGamePhaseRef.current !== 'countdown' &&
+              prevGamePhaseRef.current !== 'question'
+            ) {
+              setAnswered(false)
+              setPlayerAnswer(null)
+              setMyReactionCount(0)
+            }
+
+            if (
+              (newPhase === 'countdown' || newPhase === 'question') &&
+              prevGamePhaseRef.current === 'lobby'
+            ) {
+              setView('play-player')
+            }
+
+            prevGamePhaseRef.current = newPhase
+            setGamePhase(newPhase)
+            if (data.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+            setPhaseState(toPhaseState(data, newPhase))
+          }
           if (gamePhaseRef.current === 'results') {
             const myScore = data.scores?.[user?.uid] || 0
             const prevScore = scoresRef.current[user?.uid] || 0
@@ -213,6 +335,7 @@ export default function App() {
           // Session deleted or connection lost - clean up and redirect home
           localStorage.removeItem('quizSession')
           setSession(null)
+          setPhaseChannelHealthy(false)
           setPhaseState({})
           setView('home')
           setJoinForm({ pin: '', name: '' })
@@ -227,12 +350,20 @@ export default function App() {
       return sessionService.subscribeToSessionPhase(
         session.pin,
         (data) => {
-          setPhaseState(data || {})
-          const newPhase = data?.status || 'lobby'
+          if (!shouldAcceptPhaseUpdate(data)) {
+            return
+          }
+          setPhaseChannelHealthy(true)
+          const normalizedPhase = toPhaseState(data)
+          setPhaseState(normalizedPhase)
+          const newPhase = normalizedPhase.status || 'lobby'
           setGamePhase(newPhase)
-          if (data?.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+          if (normalizedPhase.currentQuestion !== undefined) setCurrentQuestion(normalizedPhase.currentQuestion)
         },
-        () => showToast("Session phase connection lost", "error")
+        () => {
+          setPhaseChannelHealthy(false)
+          showToast("Session phase connection lost", "error")
+        }
       )
     }
   }, [view, session?.pin])
@@ -242,8 +373,13 @@ export default function App() {
       return sessionService.subscribeToSessionPhase(
         session.pin,
         (data) => {
-          setPhaseState(data || {})
-          const newPhase = data?.status || 'lobby'
+          if (!shouldAcceptPhaseUpdate(data)) {
+            return
+          }
+          setPhaseChannelHealthy(true)
+          const normalizedPhase = toPhaseState(data)
+          setPhaseState(normalizedPhase)
+          const newPhase = normalizedPhase.status || 'lobby'
 
           if (
             (newPhase === 'countdown' || newPhase === 'question') &&
@@ -264,9 +400,12 @@ export default function App() {
 
           prevGamePhaseRef.current = newPhase
           setGamePhase(newPhase)
-          if (data?.currentQuestion !== undefined) setCurrentQuestion(data.currentQuestion)
+          if (normalizedPhase.currentQuestion !== undefined) setCurrentQuestion(normalizedPhase.currentQuestion)
         },
-        () => showToast("Session phase connection lost", "error")
+        () => {
+          setPhaseChannelHealthy(false)
+          showToast("Session phase connection lost", "error")
+        }
       )
     }
   }, [view, session?.pin])
@@ -289,13 +428,12 @@ export default function App() {
     })
     if (result.success) {
       setSession(result.session)
-      setPhaseState({
-        status: result.session.status || 'lobby',
-        currentQuestion: result.session.currentQuestion || 0,
-        countdownEnd: result.session.countdownEnd || null,
-        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
-        questionEndMs: result.session.questionEndMs || null
-      })
+      setPhaseChannelHealthy(false)
+      const initialPhaseState = toPhaseState(result.session, result.session.status || 'lobby')
+      setPhaseState(initialPhaseState)
+      if (initialPhaseState.phaseSeq !== null) {
+        lastPhaseSeqRef.current = initialPhaseState.phaseSeq
+      }
       setScores({})
       setStreaks({})
       setColdStreaks({})
@@ -341,13 +479,12 @@ export default function App() {
 
     if (result.success) {
       setSession(result.session)
-      setPhaseState({
-        status: result.session.status || 'lobby',
-        currentQuestion: result.session.currentQuestion || 0,
-        countdownEnd: result.session.countdownEnd || null,
-        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
-        questionEndMs: result.session.questionEndMs || null
-      })
+      setPhaseChannelHealthy(false)
+      const initialPhaseState = toPhaseState(result.session, result.session.status || 'lobby')
+      setPhaseState(initialPhaseState)
+      if (initialPhaseState.phaseSeq !== null) {
+        lastPhaseSeqRef.current = initialPhaseState.phaseSeq
+      }
       setScores(result.session.scores || {})
 
       if (result.session.status !== 'lobby') {
@@ -371,13 +508,12 @@ export default function App() {
 
     if (result.success) {
       setSession(result.session)
-      setPhaseState({
-        status: result.session.status || 'lobby',
-        currentQuestion: result.session.currentQuestion || 0,
-        countdownEnd: result.session.countdownEnd || null,
-        questionStartMs: result.session.questionStartMs || result.session.questionStartTimeFallback || null,
-        questionEndMs: result.session.questionEndMs || null
-      })
+      setPhaseChannelHealthy(false)
+      const initialPhaseState = toPhaseState(result.session, result.session.status || 'lobby')
+      setPhaseState(initialPhaseState)
+      if (initialPhaseState.phaseSeq !== null) {
+        lastPhaseSeqRef.current = initialPhaseState.phaseSeq
+      }
       setScores(result.session.scores || {})
       setJoinForm({ pin: result.pin, name: result.name })
 
@@ -401,14 +537,10 @@ export default function App() {
   }, [user, isAdmin])
 
   const startGame = async () => {
-    const result = await gameService.startGame(session.pin)
+    await syncClock({ samples: 2 })
+    const result = await gameService.startGame(session.pin, { nowMs: getNowMs() })
     if (result.success) {
       setView('play-host')
-
-      // Auto-transition to question phase after countdown
-      setTimeout(async () => {
-        await gameService.startQuestionTimer(session.pin)
-      }, 3000)
     } else {
       showToast(result.error || "Failed to start game", "error")
     }
@@ -422,6 +554,7 @@ export default function App() {
   }
 
   const nextQuestion = async () => {
+    await syncClock({ samples: 2 })
     const result = await gameService.nextQuestion({
       pin: session.pin,
       currentQuestion,
@@ -429,15 +562,11 @@ export default function App() {
       streaks: session.streaks,
       coldStreaks: session.coldStreaks,
       answers: session.answers,
-      players: session.players
+      players: session.players,
+      nowMs: getNowMs()
     })
 
-    if (result.success && !result.isFinal) {
-      // Auto-transition to question phase after countdown
-      setTimeout(async () => {
-        await gameService.startQuestionTimer(session.pin)
-      }, 3000)
-    } else if (!result.success) {
+    if (!result.success) {
       showToast(result.error || "Failed to move to next question", "error")
     }
   }
@@ -446,6 +575,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseChannelHealthy(false)
       setPhaseState({})
       setView('dash')
     } else {
@@ -479,6 +609,7 @@ export default function App() {
     setMyReactionCount(0)
     setCurrentQuestion(0)
     setGamePhase('lobby')
+    setPhaseChannelHealthy(false)
     setPhaseState({})
     prevGamePhaseRef.current = 'lobby'
     setView('home')
@@ -497,6 +628,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseChannelHealthy(false)
       setPhaseState({})
       setView('dash')
       showToast("Quiz stopped", "info")
@@ -513,6 +645,7 @@ export default function App() {
     const result = await sessionService.deleteSession(session.pin)
     if (result.success) {
       setSession(null)
+      setPhaseChannelHealthy(false)
       setPhaseState({})
       setView('dash')
       showToast("Session ended")
@@ -553,20 +686,11 @@ export default function App() {
     if (answered) return
 
     // Grace period check - allow 3 seconds after timer ends
-    // Use fallback if serverTimestamp hasn't resolved yet, and handle Firestore Timestamp objects
-    const startTimeRaw =
-      effectiveSession?.questionStartMs ||
-      effectiveSession?.countdownEnd ||
-      effectiveSession?.questionStartTimeFallback ||
-      effectiveSession?.questionStartTime
-    const startTimeMs = startTimeRaw?.toMillis
-      ? startTimeRaw.toMillis()
-      : startTimeRaw
-    const questionEndTime = startTimeMs + (25 * 1000)  // 25 seconds
+    const questionEndTime = getQuestionEndMs(effectiveSession)
     const GRACE_PERIOD = 3000  // 3 seconds grace
-    const now = Date.now()
+    const now = getNowMs()
 
-    if (startTimeMs && now > questionEndTime + GRACE_PERIOD) {
+    if (Number.isFinite(questionEndTime) && now > questionEndTime + GRACE_PERIOD) {
       showToast("Time's up! Answer not counted.", "error")
       setAnswered(true)
       return
@@ -717,7 +841,7 @@ export default function App() {
         )}
         {view === 'play-host' && (
           <motion.div key="play-host" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <HostGamePage {...{ user, isAdmin, setView, session: effectiveSession, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }} />
+            <HostGamePage {...{ user, isAdmin, setView, session: effectiveSession, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion, clockOffsetMs }} />
           </motion.div>
         )}
         {view === 'wait' && (
@@ -727,7 +851,7 @@ export default function App() {
         )}
         {view === 'play-player' && (
           <motion.div key="play-player" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-            <PlayerGamePage {...{ session: effectiveSession, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession: leavePlayerSession }} />
+            <PlayerGamePage {...{ session: effectiveSession, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession: leavePlayerSession, clockOffsetMs }} />
           </motion.div>
         )}
       </AnimatePresence>

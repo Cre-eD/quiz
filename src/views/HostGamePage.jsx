@@ -2,25 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import Confetti from '@/components/Confetti'
 import TimerBar from '@/components/TimerBar'
 import { optionColors } from '@/constants'
+import { deriveEffectivePhase, getQuestionStartMs } from '@/features/game/utils/timeline'
 
-const toMillis = (value) => (value?.toMillis ? value.toMillis() : value)
-
-export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion }) {
+export default function HostGamePage({ user, isAdmin, setView, session, gamePhase, currentQuestion, leaderboard, streaks, reactions, badges, badgeTypes, endGame, abortGame, showQuestionResults, nextQuestion, clockOffsetMs = 0 }) {
   // ALL HOOKS MUST BE AT THE TOP - React requires this!
   const [countdown, setCountdown] = useState(3)
   const reactionsContainerRef = useRef(null)
   const processedIdsRef = useRef(new Set())
-  const questionStartMs = toMillis(
-    session?.questionStartMs ??
-    session?.countdownEnd ??
-    session?.questionStartTimeFallback ??
-    session?.questionStartTime
-  )
-  const shouldForceQuestionPhase =
-    gamePhase === 'countdown' &&
-    typeof questionStartMs === 'number' &&
-    Date.now() >= questionStartMs
-  const effectivePhase = shouldForceQuestionPhase ? 'question' : gamePhase
+  const nowMs = Date.now() + clockOffsetMs
+  const questionStartMs = getQuestionStartMs(session)
+  const effectivePhase = deriveEffectivePhase(gamePhase, session, nowMs)
 
   // Process new reactions and add them directly to DOM (no React state)
   useEffect(() => {
@@ -61,7 +52,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   useEffect(() => {
     if (effectivePhase === 'countdown' && session?.countdownEnd) {
       const updateCountdown = () => {
-        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        const remaining = Math.ceil((session.countdownEnd - (Date.now() + clockOffsetMs)) / 1000)
         setCountdown(Math.max(0, remaining))
       }
 
@@ -70,7 +61,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
       const interval = setInterval(updateCountdown, 100)
       return () => clearInterval(interval)
     }
-  }, [effectivePhase, session?.countdownEnd])
+  }, [effectivePhase, session?.countdownEnd, clockOffsetMs])
 
   // Derived values (can be after hooks, before conditionals)
   const question = session?.quiz?.questions?.[currentQuestion]
@@ -247,7 +238,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
         </div>
       </div>
 
-      <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={showQuestionResults} startTime={questionStartMs} />
+      <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={showQuestionResults} startTime={questionStartMs} clockOffsetMs={clockOffsetMs} />
 
       <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
         <h2 className="text-4xl font-bold mb-12 max-w-4xl">{question?.text}</h2>

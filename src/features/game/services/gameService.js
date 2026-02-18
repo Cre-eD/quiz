@@ -6,49 +6,72 @@
  * Complex scoring logic remains in App.jsx and can be extracted to utils in future phases.
  */
 
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
 import { secureRandom } from '@/shared/utils/crypto'
+import { COUNTDOWN_DURATION_MS, QUESTION_DURATION_MS } from '@/features/game/utils/timeline'
 
-const COUNTDOWN_DURATION_MS = 3000
-const QUESTION_DURATION_MS = 25000
+const getSafeNow = (value) => (Number.isFinite(value) ? value : Date.now())
+const getNextPhaseSeq = (sessionData) => {
+  const current = Number.isFinite(sessionData?.phaseSeq) ? sessionData.phaseSeq : 0
+  return current + 1
+}
 
 /**
  * Start a game session (transition to countdown phase)
  * @param {string} pin - Session PIN
  * @returns {Promise<Object>} - Object with { success: boolean, error?: string }
  */
-export async function startGame(pin) {
+export async function startGame(pin, options = {}) {
   try {
     if (!pin) {
       return { success: false, error: 'PIN is required' }
     }
 
-    const now = Date.now()
+    const now = getSafeNow(options.nowMs)
+    const sessionRef = doc(db, 'sessions', pin)
+    const phaseRef = doc(db, 'sessions', pin, 'phase', 'current')
+    const sessionSnap = await getDoc(sessionRef)
+
+    if (!sessionSnap.exists()) {
+      return { success: false, error: 'Session not found' }
+    }
+
+    const sessionData = sessionSnap.data()
+    const phaseSeq = getNextPhaseSeq(sessionData)
     const questionStartMs = now + COUNTDOWN_DURATION_MS
-    await updateDoc(doc(db, 'sessions', pin), {
+    const questionEndMs = questionStartMs + QUESTION_DURATION_MS
+    const batch = writeBatch(db)
+
+    batch.update(sessionRef, {
       status: 'countdown',
       currentQuestion: 0,
       answers: {},
       countdownEnd: questionStartMs,
       questionStartMs,
-      questionEndMs: questionStartMs + QUESTION_DURATION_MS,
+      questionEndMs,
       questionStartTime: null,
       questionStartTimeFallback: questionStartMs,
-      reactions: []
+      reactions: [],
+      phaseSeq
     })
-    await setDoc(
-      doc(db, 'sessions', pin, 'phase', 'current'),
+
+    batch.set(
+      phaseRef,
       {
         status: 'countdown',
         currentQuestion: 0,
         countdownEnd: questionStartMs,
         questionStartMs,
-        questionEndMs: questionStartMs + QUESTION_DURATION_MS,
-        updatedAt: Date.now()
+        questionEndMs,
+        phaseSeq,
+        updatedAt: now,
+        serverUpdatedAt: serverTimestamp()
       },
       { merge: true }
     )
+
+    await batch.commit()
 
     return { success: true }
   } catch (error) {
@@ -82,27 +105,36 @@ export async function startQuestionTimer(pin) {
     const sessionData = sessionSnap.data()
     if (sessionData.status === 'countdown') {
       const scheduledStartMs = sessionData.questionStartMs || sessionData.countdownEnd || Date.now()
+      const questionEndMs = sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS)
+      const phaseSeq = getNextPhaseSeq(sessionData)
+      const batch = writeBatch(db)
 
       // Keep scheduled numeric start stable; server timestamp is only informational.
-      await updateDoc(sessionRef, {
+      batch.update(sessionRef, {
         status: 'question',
         questionStartTime: serverTimestamp(),
         questionStartTimeFallback: scheduledStartMs,
         questionStartMs: scheduledStartMs,
-        questionEndMs: sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS)
+        questionEndMs,
+        phaseSeq
       })
-      await setDoc(
+
+      batch.set(
         doc(db, 'sessions', pin, 'phase', 'current'),
         {
           status: 'question',
           currentQuestion: sessionData.currentQuestion ?? 0,
           countdownEnd: sessionData.countdownEnd ?? scheduledStartMs,
           questionStartMs: scheduledStartMs,
-          questionEndMs: sessionData.questionEndMs || (scheduledStartMs + QUESTION_DURATION_MS),
-          updatedAt: Date.now()
+          questionEndMs,
+          phaseSeq,
+          updatedAt: getSafeNow(),
+          serverUpdatedAt: serverTimestamp()
         },
         { merge: true }
       )
+
+      await batch.commit()
     }
 
     return { success: true }
@@ -126,17 +158,36 @@ export async function showQuestionResults(pin) {
       return { success: false, error: 'PIN is required' }
     }
 
-    await updateDoc(doc(db, 'sessions', pin), {
-      status: 'results'
+    const sessionRef = doc(db, 'sessions', pin)
+    const phaseRef = doc(db, 'sessions', pin, 'phase', 'current')
+    const sessionSnap = await getDoc(sessionRef)
+
+    if (!sessionSnap.exists()) {
+      return { success: false, error: 'Session not found' }
+    }
+
+    const sessionData = sessionSnap.data()
+    const phaseSeq = getNextPhaseSeq(sessionData)
+    const batch = writeBatch(db)
+
+    batch.update(sessionRef, {
+      status: 'results',
+      phaseSeq
     })
-    await setDoc(
-      doc(db, 'sessions', pin, 'phase', 'current'),
+
+    batch.set(
+      phaseRef,
       {
         status: 'results',
-        updatedAt: Date.now()
+        currentQuestion: sessionData.currentQuestion ?? 0,
+        phaseSeq,
+        updatedAt: getSafeNow(),
+        serverUpdatedAt: serverTimestamp()
       },
       { merge: true }
     )
+
+    await batch.commit()
 
     return { success: true }
   } catch (error) {
@@ -167,13 +218,24 @@ export async function nextQuestion({
   streaks,
   coldStreaks,
   answers,
-  players
+  players,
+  nowMs
 }) {
   try {
     if (!pin) {
       return { success: false, error: 'PIN is required' }
     }
 
+    const sessionRef = doc(db, 'sessions', pin)
+    const phaseRef = doc(db, 'sessions', pin, 'phase', 'current')
+    const sessionSnap = await getDoc(sessionRef)
+
+    if (!sessionSnap.exists()) {
+      return { success: false, error: 'Session not found' }
+    }
+
+    const sessionData = sessionSnap.data()
+    const phaseSeq = getNextPhaseSeq(sessionData)
     const nextQ = currentQuestion + 1
 
     // Update streaks for players who didn't answer
@@ -190,52 +252,69 @@ export async function nextQuestion({
 
     // Check if this was the last question
     if (nextQ >= totalQuestions) {
-      await updateDoc(doc(db, 'sessions', pin), {
+      const batch = writeBatch(db)
+
+      batch.update(sessionRef, {
         status: 'final',
         reactions: [],
         streaks: newStreaks,
-        coldStreaks: newColdStreaks
+        coldStreaks: newColdStreaks,
+        phaseSeq
       })
-      await setDoc(
-        doc(db, 'sessions', pin, 'phase', 'current'),
+
+      batch.set(
+        phaseRef,
         {
           status: 'final',
           currentQuestion,
-          updatedAt: Date.now()
+          phaseSeq,
+          updatedAt: getSafeNow(nowMs),
+          serverUpdatedAt: serverTimestamp()
         },
         { merge: true }
       )
+
+      await batch.commit()
       return { success: true, isFinal: true }
     }
 
     // Move to next question with countdown
-    const now = Date.now()
+    const now = getSafeNow(nowMs)
     const questionStartMs = now + COUNTDOWN_DURATION_MS
-    await updateDoc(doc(db, 'sessions', pin), {
+    const questionEndMs = questionStartMs + QUESTION_DURATION_MS
+    const batch = writeBatch(db)
+
+    batch.update(sessionRef, {
       status: 'countdown',
       currentQuestion: nextQ,
       answers: {},
       countdownEnd: questionStartMs,
       questionStartMs,
-      questionEndMs: questionStartMs + QUESTION_DURATION_MS,
+      questionEndMs,
       questionStartTime: null,
       questionStartTimeFallback: questionStartMs,
       reactions: [],
       streaks: newStreaks,
-      coldStreaks: newColdStreaks
+      coldStreaks: newColdStreaks,
+      phaseSeq
     })
-    await setDoc(
-      doc(db, 'sessions', pin, 'phase', 'current'),
+
+    batch.set(
+      phaseRef,
       {
         status: 'countdown',
         currentQuestion: nextQ,
         countdownEnd: questionStartMs,
         questionStartMs,
-        questionEndMs: questionStartMs + QUESTION_DURATION_MS,
-        updatedAt: Date.now()
+        questionEndMs,
+        phaseSeq,
+        updatedAt: now,
+        serverUpdatedAt: serverTimestamp()
       },
       { merge: true }
     )
+
+    await batch.commit()
 
     return { success: true, isFinal: false }
   } catch (error) {

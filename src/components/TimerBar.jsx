@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-export default function TimerBar({ duration, onComplete, isRunning, startTime }) {
+export default function TimerBar({ duration, onComplete, isRunning, startTime, clockOffsetMs = 0 }) {
   const [timeLeft, setTimeLeft] = useState(duration)
   const completedRef = useRef(false)
   const startTimeMs = startTime?.toMillis ? startTime.toMillis() : startTime
@@ -15,7 +15,7 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
     if (!isRunning || normalizedStartTime === null) return
 
     const updateTimer = () => {
-      const elapsed = (Date.now() - normalizedStartTime) / 1000
+      const elapsed = ((Date.now() + clockOffsetMs) - normalizedStartTime) / 1000
       const remaining = Math.max(0, duration - elapsed)
       setTimeLeft(remaining)
 
@@ -31,7 +31,7 @@ export default function TimerBar({ duration, onComplete, isRunning, startTime })
 
     const timer = setInterval(updateTimer, 100)
     return () => clearInterval(timer)
-  }, [isRunning, normalizedStartTime, duration, onComplete])
+  }, [isRunning, normalizedStartTime, duration, onComplete, clockOffsetMs])
 
   const percentage = Math.max(0, Math.min(100, (timeLeft / duration) * 100))
   const color = percentage > 50 ? 'bg-green-500' : percentage > 25 ? 'bg-yellow-500' : 'bg-red-500'

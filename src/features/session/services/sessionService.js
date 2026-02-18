@@ -64,6 +64,7 @@ export async function createSession({ quiz, leaderboardId = null, leaderboardNam
       badges: {},
       correctCounts: {},
       bannedUsers: [],
+      phaseSeq: 0,
       createdAt: Date.now() // Firestore rules require createdAt
     }
 
@@ -71,6 +72,7 @@ export async function createSession({ quiz, leaderboardId = null, leaderboardNam
     await setDoc(doc(db, 'sessions', pin, 'phase', 'current'), {
       status: 'lobby',
       currentQuestion: 0,
+      phaseSeq: 0,
       updatedAt: Date.now()
     })
 

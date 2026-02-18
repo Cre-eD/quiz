@@ -4,27 +4,18 @@ import TimerBar from '@/components/TimerBar'
 import MyBadges from '@/features/game/components/MyBadges'
 import { optionColors } from '@/constants'
 import { haptic } from '@/utils/haptic'
+import { deriveEffectivePhase, getQuestionStartMs } from '@/features/game/utils/timeline'
 
-const toMillis = (value) => (value?.toMillis ? value.toMillis() : value)
-
-export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession }) {
+export default function PlayerGamePage({ session, gamePhase, currentQuestion, user, scores, streaks, coldStreaks, badges, badgeTypes, leaderboard, answered, setAnswered, submitAnswer, sendReaction, reactionEmojis, myReactionCount, MAX_REACTIONS_PER_QUESTION, showConfetti, setView, setSession, setJoinForm, shakeScreen, setShakeScreen, scorePopKey, showToast, onLeaveSession, clockOffsetMs = 0 }) {
   const [countdown, setCountdown] = useState(3)
   const [canSubmit, setCanSubmit] = useState(true)
 
   const reactionsLeft = MAX_REACTIONS_PER_QUESTION - myReactionCount
   const canReact = reactionsLeft > 0
   const question = session?.quiz?.questions?.[currentQuestion]
-  const questionStartMs = toMillis(
-    session?.questionStartMs ??
-    session?.countdownEnd ??
-    session?.questionStartTimeFallback ??
-    session?.questionStartTime
-  )
-  const shouldForceQuestionPhase =
-    gamePhase === 'countdown' &&
-    typeof questionStartMs === 'number' &&
-    Date.now() >= questionStartMs
-  const effectivePhase = shouldForceQuestionPhase ? 'question' : gamePhase
+  const nowMs = Date.now() + clockOffsetMs
+  const questionStartMs = getQuestionStartMs(session)
+  const effectivePhase = deriveEffectivePhase(gamePhase, session, nowMs)
   const myStreak = streaks?.[user?.uid] || 0
   const myColdStreak = coldStreaks?.[user?.uid] || 0
   const myBadges = badges?.[user?.uid] || {}
@@ -45,7 +36,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   useEffect(() => {
     if (effectivePhase === 'countdown' && session?.countdownEnd) {
       const updateCountdown = () => {
-        const remaining = Math.ceil((session.countdownEnd - Date.now()) / 1000)
+        const remaining = Math.ceil((session.countdownEnd - (Date.now() + clockOffsetMs)) / 1000)
         setCountdown(Math.max(0, remaining))
       }
 
@@ -57,7 +48,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     } else {
       setCountdown(3) // Reset to default when not in countdown
     }
-  }, [effectivePhase, session?.countdownEnd])
+  }, [effectivePhase, session?.countdownEnd, clockOffsetMs])
 
   // Button disable logic - sync with TimerBar
   useEffect(() => {
@@ -230,7 +221,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     <div className="min-h-screen flex flex-col p-4 relative">
       <LeaveButton />
       <div className="mb-4">
-        <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartMs} />
+        <TimerBar duration={25} isRunning={effectivePhase === 'question'} onComplete={() => {}} startTime={questionStartMs} clockOffsetMs={clockOffsetMs} />
       </div>
 
       {myStreak >= 2 && (
@@ -264,7 +255,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
               if (!canSubmit) return
               haptic.light()
               if (typeof questionStartMs !== 'number') return
-              const answerTime = Date.now() - questionStartMs
+              const answerTime = (Date.now() + clockOffsetMs) - questionStartMs
               submitAnswer(idx, answerTime)
             }}
             className={`${optionColors[idx].bg} rounded-2xl flex flex-col items-center justify-center p-4 option-btn active:scale-95 animate-option-reveal ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}
