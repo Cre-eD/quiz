@@ -4,16 +4,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const {
   mockDoc,
   mockGetDoc,
-  mockSetDoc,
   mockUpdateDoc,
+  mockWriteBatch,
+  mockBatchUpdate,
+  mockBatchSet,
+  mockBatchCommit,
   mockServerTimestamp,
   mockDb
 } = vi.hoisted(() => {
   return {
     mockDoc: vi.fn(),
     mockGetDoc: vi.fn(),
-    mockSetDoc: vi.fn(),
     mockUpdateDoc: vi.fn(),
+    mockWriteBatch: vi.fn(),
+    mockBatchUpdate: vi.fn(),
+    mockBatchSet: vi.fn(),
+    mockBatchCommit: vi.fn(),
     mockServerTimestamp: vi.fn(() => Date.now()),  // Return current timestamp
     mockDb: {}
   }
@@ -22,9 +28,9 @@ const {
 vi.mock('firebase/firestore', () => ({
   doc: (...args) => mockDoc(...args),
   getDoc: (...args) => mockGetDoc(...args),
-  setDoc: (...args) => mockSetDoc(...args),
   updateDoc: (...args) => mockUpdateDoc(...args),
-  serverTimestamp: (...args) => mockServerTimestamp(...args)
+  serverTimestamp: (...args) => mockServerTimestamp(...args),
+  writeBatch: (...args) => mockWriteBatch(...args)
 }))
 
 vi.mock('@/lib/firebase/config', () => ({
@@ -45,7 +51,16 @@ describe('gameService', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     mockDoc.mockReturnValue({ id: 'mock-doc-ref' })
-    mockSetDoc.mockResolvedValue()
+    mockGetDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ status: 'lobby', phaseSeq: 0, currentQuestion: 0 })
+    })
+    mockBatchCommit.mockResolvedValue()
+    mockWriteBatch.mockReturnValue({
+      update: mockBatchUpdate,
+      set: mockBatchSet,
+      commit: mockBatchCommit
+    })
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -55,12 +70,10 @@ describe('gameService', () => {
 
   describe('startGame', () => {
     it('should start game successfully', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       const result = await startGame('1234')
 
       expect(result.success).toBe(true)
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           status: 'countdown',
@@ -71,9 +84,12 @@ describe('gameService', () => {
           questionEndMs: expect.any(Number),
           questionStartTime: null,
           questionStartTimeFallback: expect.any(Number),
-          reactions: []
+          reactions: [],
+          phaseSeq: expect.any(Number)
         })
       )
+      expect(mockBatchSet).toHaveBeenCalled()
+      expect(mockBatchCommit).toHaveBeenCalled()
     })
 
     it('should reject missing PIN', async () => {
@@ -81,7 +97,7 @@ describe('gameService', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('required')
-      expect(mockUpdateDoc).not.toHaveBeenCalled()
+      expect(mockBatchUpdate).not.toHaveBeenCalled()
     })
 
     it('should reject null PIN', async () => {
@@ -92,18 +108,18 @@ describe('gameService', () => {
     })
 
     it('should handle Firestore error', async () => {
-      const error = new Error('Update failed')
-      mockUpdateDoc.mockRejectedValue(error)
+      const error = new Error('Commit failed')
+      mockBatchCommit.mockRejectedValue(error)
 
       const result = await startGame('1234')
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Update failed')
+      expect(result.error).toBe('Commit failed')
       expect(console.error).toHaveBeenCalledWith('Start game error:', error)
     })
 
     it('should handle Firestore error without message', async () => {
-      mockUpdateDoc.mockRejectedValue({})
+      mockBatchCommit.mockRejectedValue({})
 
       const result = await startGame('1234')
 
@@ -116,23 +132,24 @@ describe('gameService', () => {
       const countdownEnd = Date.now() + 3000
       mockGetDoc.mockResolvedValue({
         exists: () => true,
-        data: () => ({ status: 'countdown', countdownEnd })
+        data: () => ({ status: 'countdown', countdownEnd, phaseSeq: 2, currentQuestion: 0 })
       })
-      mockUpdateDoc.mockResolvedValue()
 
       const result = await startQuestionTimer('1234')
 
       expect(result.success).toBe(true)
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           status: 'question',
           questionStartTime: expect.any(Number),
           questionStartTimeFallback: countdownEnd,
           questionStartMs: countdownEnd,
-          questionEndMs: countdownEnd + 25000
+          questionEndMs: countdownEnd + 25000,
+          phaseSeq: 3
         })
       )
+      expect(mockBatchCommit).toHaveBeenCalled()
     })
 
     it('should not transition if not in countdown status', async () => {
@@ -144,7 +161,7 @@ describe('gameService', () => {
       const result = await startQuestionTimer('1234')
 
       expect(result.success).toBe(true)
-      expect(mockUpdateDoc).not.toHaveBeenCalled()
+      expect(mockBatchUpdate).not.toHaveBeenCalled()
     })
 
     it('should reject missing PIN', async () => {
@@ -178,15 +195,19 @@ describe('gameService', () => {
 
   describe('showQuestionResults', () => {
     it('should show results successfully', async () => {
-      mockUpdateDoc.mockResolvedValue()
+      mockGetDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ currentQuestion: 1, phaseSeq: 4 })
+      })
 
       const result = await showQuestionResults('1234')
 
       expect(result.success).toBe(true)
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
-        { status: 'results' }
+        expect.objectContaining({ status: 'results', phaseSeq: 5 })
       )
+      expect(mockBatchCommit).toHaveBeenCalled()
     })
 
     it('should reject missing PIN', async () => {
@@ -194,17 +215,17 @@ describe('gameService', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('required')
-      expect(mockUpdateDoc).not.toHaveBeenCalled()
+      expect(mockBatchUpdate).not.toHaveBeenCalled()
     })
 
     it('should handle Firestore error', async () => {
-      const error = new Error('Update failed')
-      mockUpdateDoc.mockRejectedValue(error)
+      const error = new Error('Get failed')
+      mockGetDoc.mockRejectedValue(error)
 
       const result = await showQuestionResults('1234')
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Update failed')
+      expect(result.error).toBe('Get failed')
     })
   })
 
@@ -220,13 +241,11 @@ describe('gameService', () => {
     }
 
     it('should move to next question successfully', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       const result = await nextQuestion(baseParams)
 
       expect(result.success).toBe(true)
       expect(result.isFinal).toBe(false)
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           status: 'countdown',
@@ -237,17 +256,17 @@ describe('gameService', () => {
           questionEndMs: expect.any(Number),
           questionStartTime: null,
           questionStartTimeFallback: expect.any(Number),
-          reactions: []
+          reactions: [],
+          phaseSeq: expect.any(Number)
         })
       )
+      expect(mockBatchCommit).toHaveBeenCalled()
     })
 
     it('should update streaks for players who did not answer', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       await nextQuestion(baseParams)
 
-      const updateCall = mockUpdateDoc.mock.calls[0][1]
+      const updateCall = mockBatchUpdate.mock.calls[0][1]
       expect(updateCall.streaks['user-2']).toBe(0) // Did not answer
       expect(updateCall.coldStreaks['user-2']).toBe(1) // Cold streak incremented
       expect(updateCall.streaks['user-1']).toBe(2) // Answered, preserved
@@ -255,8 +274,6 @@ describe('gameService', () => {
     })
 
     it('should transition to final when last question completed', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       const result = await nextQuestion({
         ...baseParams,
         currentQuestion: 2,
@@ -265,37 +282,34 @@ describe('gameService', () => {
 
       expect(result.success).toBe(true)
       expect(result.isFinal).toBe(true)
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockBatchUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           status: 'final',
-          reactions: []
+          reactions: [],
+          phaseSeq: expect.any(Number)
         })
       )
     })
 
     it('should handle players object as null', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       const result = await nextQuestion({
         ...baseParams,
         players: null
       })
 
       expect(result.success).toBe(true)
-      expect(mockUpdateDoc).toHaveBeenCalled()
+      expect(mockBatchUpdate).toHaveBeenCalled()
     })
 
     it('should handle answers object as null', async () => {
-      mockUpdateDoc.mockResolvedValue()
-
       const result = await nextQuestion({
         ...baseParams,
         answers: null
       })
 
       expect(result.success).toBe(true)
-      const updateCall = mockUpdateDoc.mock.calls[0][1]
+      const updateCall = mockBatchUpdate.mock.calls[0][1]
       expect(updateCall.streaks['user-1']).toBe(0) // All players treated as non-answerers
       expect(updateCall.streaks['user-2']).toBe(0)
     })
@@ -308,17 +322,17 @@ describe('gameService', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('required')
-      expect(mockUpdateDoc).not.toHaveBeenCalled()
+      expect(mockBatchUpdate).not.toHaveBeenCalled()
     })
 
     it('should handle Firestore error', async () => {
-      const error = new Error('Update failed')
-      mockUpdateDoc.mockRejectedValue(error)
+      const error = new Error('Get failed')
+      mockGetDoc.mockRejectedValue(error)
 
       const result = await nextQuestion(baseParams)
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Update failed')
+      expect(result.error).toBe('Get failed')
       expect(console.error).toHaveBeenCalledWith('Next question error:', error)
     })
   })
