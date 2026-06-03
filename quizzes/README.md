@@ -1,40 +1,44 @@
 # Quizzes
 
-Multi-course quiz system with SOPS encryption support.
+Multi-course quiz system. **One quiz per lecture** — a single `post` quiz taken
+after each lecture. (The earlier `pre`/`mid`/`post` three-quiz model is retired.)
 
 ## Folder Structure
 
 ```
 quizzes/
-├── devops/              # DevOps course (16 lectures)
-├── devops-intro/        # DevOps Intro (English)
-├── devops-intro-rus/    # DevOps Intro (Russian)
-├── devsecops-intro/     # DevSecOps Intro
+├── devops/              # DevOps (16 lectures)
+├── devops-intro/        # DevOps Intro (English, 10 lectures)
+├── devops-intro-rus/    # DevOps Intro (Russian, 10 lectures)
+├── devsecops-intro/     # DevSecOps Intro (English, 10 lectures)
+├── devsecops-intro-rus/ # DevSecOps Intro (Russian, 10 lectures)
+├── sre-intro/           # SRE Intro (English, 10 lectures)
+├── sre-intro-rus/       # SRE Intro (Russian, 10 lectures)
 └── README.md
 ```
 
-Each course folder contains quiz files named `lec{N}_{type}.json` (or `.enc.json` for encrypted).
+Each course folder contains one quiz file per lecture, named `lec{N}_post.json`.
 
 ## File Naming
 
 ```
-{course}/lec{N}_{type}.json
+{course}/lec{N}_post.json
 ```
 
 - `course` = Folder name (e.g., `devops`, `devsecops-intro`)
 - `N` = Lecture number
-- `type` = `pre`, `mid`, or `post`
+- `post` = Quiz type — always `post` (one quiz per lecture, taken afterwards)
 
-**Firestore ID format:** `{course}-lec{N}-{type}` (e.g., `devops-lec1-pre`)
+**Firestore ID format:** `{course}-lec{N}-post` (e.g., `devops-lec1-post`)
 
 ## Quiz JSON Schema
 
 ```json
 {
-  "title": "Git & GitHub - Pre-Quiz (Slides 1-12)",
+  "title": "Git & GitHub - Quiz",
   "level": 2,
-  "category": "pre",
-  "description": "Slides 1-12: VCS basics, Git history, DVCS vs centralized, Working Tree/Staging/Repo model, commits/SHA, branches/HEAD",
+  "category": "post",
+  "description": "VCS basics, Git history, DVCS vs centralized, Working Tree/Staging/Repo model, commits/SHA, branches/HEAD, merge/rebase",
   "questions": [
     {
       "text": "What does VCS stand for?",
@@ -55,16 +59,16 @@ Each course folder contains quiz files named `lec{N}_{type}.json` (or `.enc.json
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `title` | string | Quiz title with lecture topic and slide range |
+| `title` | string | Quiz title with lecture topic |
 | `level` | number | Lecture number (1, 2, 3...) |
-| `category` | string | `"pre"`, `"mid"`, or `"post"` |
+| `category` | string | Always `"post"` |
 | `questions` | array | Array of question objects |
 
 ### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `description` | string | Slides covered and topics (e.g., "Slides 1-10: Threat modeling basics, STRIDE intro") |
+| `description` | string | Topics covered (e.g., "Threat modeling basics, STRIDE, attack trees") |
 
 ### Question Object
 
@@ -75,14 +79,12 @@ Each course folder contains quiz files named `lec{N}_{type}.json` (or `.enc.json
 | `correct` | number | Index of correct answer (0-3) |
 | `explanation` | string | Brief explanation shown after answering |
 
-## Creating Quizzes from Lectures
+## Creating a Quiz from a Lecture
 
-### Step 1: Divide the Lecture into 3 Parts
+### Step 1: Cover the Whole Lecture
 
-For a lecture with N slides:
-- **Pre-quiz**: Slides 1 to ~N/3 (intro concepts)
-- **Mid-quiz**: Slides ~N/3 to ~2N/3 (core content)
-- **Post-quiz**: Slides ~2N/3 to N (advanced topics, case studies)
+One quiz per lecture covers the full slide deck, weighted toward the key
+takeaways. (No more splitting into pre/mid/post.)
 
 ### Step 2: Question Guidelines
 
@@ -138,42 +140,41 @@ For non-English quizzes (e.g., Russian):
 ## CLI Commands
 
 ```bash
-# Upload specific quizzes
-node scripts/upload-quiz.js quizzes/devops/lec1_pre.json
+# Upload one quiz
+node scripts/upload-quiz.js quizzes/devops/lec1_post.json
 
-# Upload multiple quizzes
+# Upload a whole course
 node scripts/upload-quiz.js quizzes/devsecops-intro/*.json
+
+# Upload everything
+node scripts/upload-quiz.js --all
 
 # List all quizzes in Firestore (grouped by course)
 node scripts/upload-quiz.js --list
-
-# Decrypt encrypted quiz for editing
-sops -d quizzes/devops/lec1_pre.enc.json > quizzes/devops/lec1_pre.json
-
-# Re-encrypt after editing
-sops -e --output quizzes/devops/lec1_pre.enc.json quizzes/devops/lec1_pre.json
-rm quizzes/devops/lec1_pre.json
 ```
 
-## File Types
+## Storage
 
-- `*.json` - Unencrypted (gitignored, never commit)
-- `*.enc.json` - Encrypted with SOPS (safe to commit)
+- Quiz files are authored as plaintext `lec{N}_post.json` and uploaded to
+  **Firestore**, which is the runtime source of truth for the app.
+- Plaintext `*.json` quiz files are **gitignored** (not committed).
+- SOPS encryption (`*.enc.json`) remains available via `scripts/quiz-encrypt.sh`
+  / `scripts/quiz-decrypt.sh` if you want to commit encrypted backups; the
+  `.gitignore` whitelists `*.enc.json`. This is optional/legacy — current
+  quizzes live only on disk + Firestore.
 
 ## Quick Generation Prompt
 
-When asking Claude to generate quizzes:
+When asking Claude to generate a quiz:
 
 ```
-Generate 3 quizzes in [language] for lecture about [topic]:
+Generate a quiz in [language] for the lecture about [topic]:
 - Course folder: quizzes/[course]/
 - Lecture number: [N]
 - Source: [path to lecture markdown]
 
 Requirements:
-- Pre-quiz: ~15 questions covering slides 1-X
-- Mid-quiz: ~15 questions covering slides X-Y
-- Post-quiz: ~15 questions covering slides Y-Z
+- One post-quiz, ~15 questions covering the whole lecture
 - Mix fun and serious questions
 - Distribute correct answers evenly (0,1,2,3)
 - Don't translate: [list technical terms]
@@ -182,7 +183,10 @@ Requirements:
 
 ## Course Display Names
 
-Used in the dashboard UI:
+Used in the dashboard UI. The `courseNames` map is defined in
+`src/views/DashboardPage.jsx` (and mirrored in
+`src/features/quiz/components/LaunchQuizModal.jsx` and
+`src/features/leaderboard/components/LeaderboardCard.jsx`):
 
 | Folder | Display Name |
 |--------|--------------|
@@ -190,5 +194,10 @@ Used in the dashboard UI:
 | `devops-intro` | DevOps Intro |
 | `devops-intro-rus` | DevOps Intro (RU) |
 | `devsecops-intro` | DevSecOps Intro |
+| `devsecops-intro-rus` | DevSecOps Intro (RU) |
 
-To add a new course, create a folder and add it to `courseNames` in `src/App.jsx`.
+> ⚠️ `sre-intro` and `sre-intro-rus` exist as quiz folders/Firestore courses
+> but are **not yet** in the `courseNames` map — they render as "Other".
+> Add them to each map above to label them in the UI.
+
+To add a new course, create a folder and add it to `courseNames` in the files listed above.
