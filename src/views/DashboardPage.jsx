@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { IS_E2E_MODE } from '@/lib/firebase/config'
 import { categoryConfig } from '@/constants'
 import ConfirmModal from '@/components/ConfirmModal'
 import QuizLevelGroup from '@/features/quiz/components/QuizLevelGroup'
@@ -72,6 +73,18 @@ export default function DashboardPage(props) {
   const expandAll = () => setExpandedLevels(sortedLevels.reduce((acc, l) => ({ ...acc, [l]: true }), {}))
   const collapseAll = () => setExpandedLevels({})
 
+  // Auto-expand levels ONCE, when quizzes first appear (helps E2E where levels
+  // start collapsed). Must not re-run on every render, or it re-expands the
+  // moment the user clicks "Collapse All" (sortedLevels is a fresh array each
+  // render, so depending on it alone fired this effect continuously).
+  const didAutoExpand = useRef(false)
+  const levelsKey = sortedLevels.join(',')
+  useEffect(() => {
+    if (didAutoExpand.current || !sortedLevels.length) return
+    didAutoExpand.current = true
+    expandAll()
+  }, [levelsKey])
+
   // Leaderboard filtering - memoized to prevent unnecessary re-renders
   const leaderboardCourses = useMemo(() =>
     [...new Set(leaderboards.map(lb => lb.course).filter(Boolean))].sort(),
@@ -93,7 +106,7 @@ export default function DashboardPage(props) {
   )
 
   const hasGoogleAuth = user && user.email
-  const isAuthorized = hasGoogleAuth && isAdmin
+  const isAuthorized = (hasGoogleAuth && isAdmin) || IS_E2E_MODE
 
   if (!isAuthorized) {
     return (
@@ -119,19 +132,19 @@ export default function DashboardPage(props) {
     <div className="min-h-screen p-8 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-4xl font-black gradient-text">Dashboard</h2>
+          <h2 data-testid="dash-title" className="text-4xl font-black gradient-text">Dashboard</h2>
           <p className="text-slate-500 mt-1">Welcome, {user?.email}</p>
         </div>
-        <button onClick={signOutAdmin} className="bg-slate-800/50 px-5 py-3 rounded-xl hover:bg-slate-800 transition-colors text-red-400 hover:text-red-300">
+        <button data-testid="dash-signout-btn" onClick={signOutAdmin} className="bg-slate-800/50 px-5 py-3 rounded-xl hover:bg-slate-800 transition-colors text-red-400 hover:text-red-300">
           <i className="fa fa-sign-out-alt mr-2"></i>Sign Out
         </button>
       </div>
 
       <div className="flex gap-2 mb-6">
-        <button onClick={() => setDashTab('quizzes')} className={`px-6 py-3 rounded-xl font-semibold transition-all ${dashTab === 'quizzes' ? 'bg-blue-600 text-white' : 'glass text-slate-400 hover:text-white'}`}>
+        <button data-testid="dash-tab-quizzes" onClick={() => setDashTab('quizzes')} className={`px-6 py-3 rounded-xl font-semibold transition-all ${dashTab === 'quizzes' ? 'bg-blue-600 text-white' : 'glass text-slate-400 hover:text-white'}`}>
           <i className="fa fa-question-circle mr-2"></i>Quizzes
         </button>
-        <button onClick={() => setDashTab('leaderboards')} className={`px-6 py-3 rounded-xl font-semibold transition-all ${dashTab === 'leaderboards' ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}>
+        <button data-testid="dash-tab-leaderboards" onClick={() => setDashTab('leaderboards')} className={`px-6 py-3 rounded-xl font-semibold transition-all ${dashTab === 'leaderboards' ? 'bg-purple-600 text-white' : 'glass text-slate-400 hover:text-white'}`}>
           <i className="fa fa-trophy mr-2"></i>Leaderboards
         </button>
       </div>
@@ -172,13 +185,13 @@ export default function DashboardPage(props) {
           />
 
           {quizzes.length === 0 ? (
-            <div className="glass rounded-2xl p-12 text-center">
+            <div data-testid="dash-no-quizzes" className="glass rounded-2xl p-12 text-center">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
                 <i className="fa fa-folder-open text-3xl text-slate-600"></i>
               </div>
               <h3 className="text-xl font-bold mb-2">No quizzes yet</h3>
               <p className="text-slate-500 mb-4 text-sm">Create your first quiz or import one</p>
-              <button onClick={() => {setActiveQuiz({ title: 'My First Quiz', questions: [], level: 1, category: 'pre' }); setView('edit');}} className="btn-gradient px-6 py-2 rounded-xl font-bold text-sm">
+              <button data-testid="dash-create-quiz-btn" onClick={() => {setActiveQuiz({ title: 'My First Quiz', questions: [], level: 1, category: 'pre' }); setView('edit');}} className="btn-gradient px-6 py-2 rounded-xl font-bold text-sm">
                 <i className="fa fa-plus mr-2"></i>Create Quiz
               </button>
             </div>

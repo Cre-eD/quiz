@@ -28,6 +28,7 @@ export default function HomePage({
           <input
             type="text"
             inputMode="numeric"
+            data-testid="home-pin-input"
             className="w-full glass p-6 rounded-2xl text-center text-5xl font-mono font-bold tracking-[0.3em] focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 placeholder:tracking-normal placeholder:text-2xl indent-[0.15em]"
             placeholder="PIN"
             maxLength={4}
@@ -35,6 +36,7 @@ export default function HomePage({
             onChange={e => setJoinForm({...joinForm, pin: e.target.value.replace(/\D/g, '')})}
           />
           <input
+            data-testid="home-name-input"
             className="w-full glass p-4 rounded-xl text-center text-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             placeholder="Your Nickname"
             maxLength={20}
@@ -54,6 +56,7 @@ export default function HomePage({
         <button
           onClick={() => { haptic.medium(); handleJoin(); }}
           disabled={loading || !joinForm.pin || !joinForm.name.trim()}
+          data-testid="home-join-btn"
           className="w-full btn-gradient py-5 rounded-2xl font-bold text-2xl disabled:opacity-50 flex items-center justify-center gap-3 mb-8"
         >
           {loading ? <><Spinner size="sm" /> Joining...</> : <><i className="fa fa-play"></i> Join Game</>}
@@ -63,6 +66,7 @@ export default function HomePage({
           <button
             onClick={() => isAdmin ? setView('dash') : handleSignInWithGoogle()}
             disabled={loading}
+            data-testid="home-teacher-btn"
             className="text-slate-500 hover:text-blue-400 transition-colors text-sm flex items-center justify-center gap-2 mx-auto"
           >
             <i className={`${isAdmin ? 'fa fa-chalkboard-teacher' : 'fab fa-google'}`}></i>

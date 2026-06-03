@@ -1,111 +1,42 @@
-/**
- * Smoke Test - Production Build Validation
- *
- * This test validates that the production build works correctly
- * by testing critical paths without authentication.
- *
- * Run against preview server: npm run preview
- */
-
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:4173'
+test.describe('Production Smoke Tests', () => {
+  test('homepage loads without runtime errors', async ({ page }) => {
+    const pageErrors = []
+    page.on('pageerror', (error) => pageErrors.push(error.message))
 
-test.describe('Production Build Smoke Tests', () => {
-  test('Homepage loads without errors', async ({ page }) => {
-    const errors = []
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        errors.push(msg.text())
-      }
-    })
-
-    await page.goto(BASE_URL)
-
-    // Check page loads
-    await expect(page.locator('h1')).toContainText('LectureQuiz')
-
-    // Check critical elements exist
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
-    await expect(page.locator('input[placeholder*="Nickname"]')).toBeVisible()
-    await expect(page.locator('button:has-text("Join Game")')).toBeVisible()
-    await expect(page.locator('button:has-text("teacher")')).toBeVisible()
-
-    // Check for console errors
-    expect(errors).toEqual([])
+    await page.goto('/')
+    await expect(page.getByTestId('home-join-btn')).toBeVisible()
+    await expect(page.getByTestId('home-pin-input')).toBeVisible()
+    await expect(page.getByTestId('home-name-input')).toBeVisible()
+    await expect(pageErrors).toEqual([])
   })
 
-  test('No emulator configuration in production bundle', async ({ page }) => {
-    await page.goto(BASE_URL)
-
-    // Check that Firebase is NOT trying to connect to emulators
+  test('bundle does not reference emulator endpoints', async ({ page }) => {
     const logs = []
-    page.on('console', msg => {
-      logs.push(msg.text())
-    })
+    page.on('console', (msg) => logs.push(msg.text()))
 
-    // Wait for Firebase initialization
-    await page.waitForTimeout(1000)
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
 
-    // Should NOT see emulator connection messages
-    const emulatorLogs = logs.filter(log =>
-      log.includes('localhost:9099') ||
-      log.includes('localhost:8080') ||
-      log.includes('Connecting to Firebase emulators')
-    )
-
-    expect(emulatorLogs).toEqual([])
+    const allLogs = logs.join('\n')
+    expect(allLogs).not.toContain('localhost:9099')
+    expect(allLogs).not.toContain('localhost:8081')
+    expect(allLogs).not.toContain('Connecting to Firebase emulators')
   })
 
-  test('Can interact with join form', async ({ page }) => {
-    await page.goto(BASE_URL)
+  test('join form can be filled', async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('home-pin-input').fill('1234')
+    await page.getByTestId('home-name-input').fill('SmokePlayer')
 
-    // Fill in PIN
-    const pinInput = page.locator('input[placeholder="PIN"]')
-    await pinInput.fill('1234')
-    await expect(pinInput).toHaveValue('1234')
-
-    // Fill in name
-    const nameInput = page.locator('input[placeholder*="Nickname"]')
-    await nameInput.fill('TestPlayer')
-    await expect(nameInput).toHaveValue('TestPlayer')
-
-    // Join button should be enabled
-    const joinButton = page.locator('button:has-text("Join Game")')
-    await expect(joinButton).toBeEnabled()
+    await expect(page.getByTestId('home-pin-input')).toHaveValue('1234')
+    await expect(page.getByTestId('home-name-input')).toHaveValue('SmokePlayer')
+    await expect(page.getByTestId('home-join-btn')).toBeEnabled()
   })
 
-  test('Critical imports loaded (no undefined errors)', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', error => {
-      errors.push(error.message)
-    })
-
-    await page.goto(BASE_URL)
-
-    // Wait for app to initialize
-    await page.waitForTimeout(1000)
-
-    // Check for reference errors (like "categoryConfig is not defined")
-    const referenceErrors = errors.filter(err =>
-      err.includes('is not defined') ||
-      err.includes('is not a function')
-    )
-
-    expect(referenceErrors).toEqual([])
-  })
-
-  test('Dashboard page renders for unauthenticated user', async ({ page }) => {
-    await page.goto(BASE_URL)
-
-    // Click "I'm a teacher" button
-    await page.locator('button:has-text("teacher")').click()
-
-    // Should see Google sign-in popup attempt (or redirect)
-    // We won't actually sign in, just verify the page doesn't crash
-    await page.waitForTimeout(500)
-
-    // Page should still be functional (no crashes)
-    await expect(page.locator('h1')).toContainText('LectureQuiz')
+  test('teacher button is visible for public smoke', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByTestId('home-teacher-btn')).toBeVisible()
   })
 })

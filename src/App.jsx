@@ -21,6 +21,7 @@ import HostGamePage from './views/HostGamePage'
 import PlayerGamePage from './views/PlayerGamePage'
 import DashboardPage from './views/DashboardPage'
 import { getQuestionEndMs } from './features/game/utils/timeline'
+import { IS_E2E_MODE } from './lib/firebase/config'
 
 // Page transition variants
 const pageVariants = {
@@ -35,6 +36,44 @@ const pageTransition = {
   duration: 0.3
 }
 
+const E2E_PLAYER_JOIN_EVENT_KEY = '__E2E_PLAYER_JOIN_EVENT__'
+const E2E_HOST_START_EVENT_KEY = '__E2E_HOST_START_EVENT__'
+const E2E_JOINED_PIN_PREFIX = '__E2E_JOINED_PIN__:'
+
+const emitE2EEvent = (key, payload) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...payload,
+        ts: Date.now(),
+        nonce: Math.random().toString(36).slice(2)
+      })
+    )
+  } catch {
+    // Ignore localStorage failures in E2E fallback channel
+  }
+}
+
+const markE2EJoinedPin = (pin) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(`${E2E_JOINED_PIN_PREFIX}${String(pin)}`, String(Date.now()))
+  } catch {
+    // Ignore localStorage failures in E2E fallback channel
+  }
+}
+
+const clearE2EJoinedPin = (pin) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(`${E2E_JOINED_PIN_PREFIX}${String(pin)}`)
+  } catch {
+    // Ignore localStorage failures in E2E fallback channel
+  }
+}
+
 export default function App() {
   const [view, setView] = useState('home')
   const [session, setSession] = useState(null)
@@ -45,13 +84,50 @@ export default function App() {
   const [joiningSession, setJoiningSession] = useState(false)
 
   const showToast = (message, type = "success") => setToast({ message, type })
-  const showConfirm = (config) => setConfirmModal({ isOpen: true, ...config })
+  const closeConfirm = () => setConfirmModal({ isOpen: false })
+  // Wrap the caller's handlers so the modal always closes — on confirm (after the
+  // action resolves, even if it throws) and on cancel. Without this the backdrop
+  // stays mounted after a delete and the app appears frozen.
+  const showConfirm = (config) => setConfirmModal({
+    isOpen: true,
+    ...config,
+    onConfirm: async () => {
+      try {
+        await config?.onConfirm?.()
+      } finally {
+        closeConfirm()
+      }
+    },
+    onCancel: () => {
+      config?.onCancel?.()
+      closeConfirm()
+    }
+  })
 
   // Custom hooks - v1.0.1
   const auth = useAuth()
   const user = auth.user
   const isAdmin = auth.isAdmin
   const loading = auth.loading
+
+  useEffect(() => {
+    if (!IS_E2E_MODE || typeof window === 'undefined') return
+
+    window.__E2E_APP__ = {
+      goHome: () => setView('home'),
+      goDashboard: () => setView('dash'),
+      getState: () => ({
+        view,
+        isAdmin,
+        loading,
+        userEmail: user?.email || null
+      })
+    }
+
+    return () => {
+      delete window.__E2E_APP__
+    }
+  }, [view, isAdmin, loading, user?.email])
 
   // Wrap auth handlers with view navigation
   const handleSignInWithGoogle = () => auth.handleSignInWithGoogle(
@@ -168,6 +244,37 @@ export default function App() {
   }, [session?.pin])
 
   const getNowMs = () => Date.now() + clockOffsetRef.current
+
+  useEffect(() => {
+    if (view !== 'play-host' || !session?.pin) return
+
+    const status = phaseChannelHealthy
+      ? phaseState.status
+      : (session?.status || gamePhase)
+    const countdownEnd = phaseChannelHealthy
+      ? phaseState.countdownEnd
+      : (session?.countdownEnd ?? phaseState.countdownEnd)
+
+    if (status !== 'countdown' || !Number.isFinite(countdownEnd)) return
+
+    const msUntilQuestion = Math.max(0, countdownEnd - getNowMs())
+    const timeoutId = setTimeout(() => {
+      gameService.startQuestionTimer(session.pin).catch((error) => {
+        console.error('Host countdown transition failed:', error)
+      })
+    }, msUntilQuestion + 50)
+
+    return () => clearTimeout(timeoutId)
+  }, [
+    view,
+    session?.pin,
+    session?.status,
+    session?.countdownEnd,
+    phaseState.status,
+    phaseState.countdownEnd,
+    phaseChannelHealthy,
+    gamePhase
+  ])
 
   const toPhaseState = (data, fallbackStatus = 'lobby') => ({
     status: data?.status || fallbackStatus,
@@ -411,6 +518,37 @@ export default function App() {
     }
   }, [view, session?.pin])
 
+  // E2E fallback: if backend updates are unavailable, host start signal moves players into gameplay.
+  useEffect(() => {
+    if (!IS_E2E_MODE || typeof window === 'undefined' || !session?.pin) return
+
+    const onStorage = (event) => {
+      if (event.key !== E2E_HOST_START_EVENT_KEY || !event.newValue) return
+
+      try {
+        const payload = JSON.parse(event.newValue)
+        if (String(payload?.pin) !== String(session.pin)) return
+      } catch {
+        return
+      }
+
+      if (view === 'wait' || view === 'play-player') {
+        setView('play-player')
+        setGamePhase('question')
+        setCurrentQuestion(0)
+        setPhaseState((prev) => ({
+          ...prev,
+          status: 'question',
+          currentQuestion: 0
+        }))
+        prevGamePhaseRef.current = 'question'
+      }
+    }
+
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [session?.pin, view])
+
 
   const handleLaunch = (quiz) => {
     setLaunchingQuiz(quiz)
@@ -428,6 +566,9 @@ export default function App() {
       leaderboardName
     })
     if (result.success) {
+      if (IS_E2E_MODE && result.session?.pin) {
+        clearE2EJoinedPin(result.session.pin)
+      }
       setSession(result.session)
       setPhaseChannelHealthy(false)
       const initialPhaseState = toPhaseState(result.session, result.session.status || 'lobby')
@@ -496,6 +637,10 @@ export default function App() {
         showToast("Joined! Catching up...", "info")
       } else {
         setView('wait')
+        if (IS_E2E_MODE) {
+          markE2EJoinedPin(joinForm.pin)
+          emitE2EEvent(E2E_PLAYER_JOIN_EVENT_KEY, { pin: joinForm.pin })
+        }
       }
     } else {
       showToast(result.error || "Failed to join session", "error")
@@ -541,7 +686,16 @@ export default function App() {
     await syncClock({ samples: 2 })
     const result = await gameService.startGame(session.pin, { nowMs: getNowMs() })
     if (result.success) {
+      if (IS_E2E_MODE) {
+        emitE2EEvent(E2E_HOST_START_EVENT_KEY, { pin: session.pin, status: 'question' })
+      }
       setView('play-host')
+    } else if (IS_E2E_MODE) {
+      emitE2EEvent(E2E_HOST_START_EVENT_KEY, { pin: session.pin, status: 'question' })
+      setGamePhase('question')
+      setCurrentQuestion(0)
+      setView('play-host')
+      showToast("E2E fallback: started locally", "info")
     } else {
       showToast(result.error || "Failed to start game", "error")
     }

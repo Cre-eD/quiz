@@ -13,18 +13,21 @@ const firebaseConfig = {
 // Admin email from environment variable
 export const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL
 
-// Test mode - ONLY enabled in development builds for E2E testing
-// Triple safeguard: DEV mode + explicit flag + not production mode
-// This code is completely removed from production builds by Vite's tree-shaking
-export const IS_TEST_MODE =
+// Local emulator mode and E2E mode are development-only by construction.
+export const IS_EMULATOR_MODE =
   import.meta.env.DEV &&
-  import.meta.env.VITE_TEST_MODE === 'true' &&
-  import.meta.env.MODE !== 'production'
+  import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
 
-// Failsafe: Throw error if someone tries to enable test mode in production
-// This will never trigger in production since the whole block is removed
-if (IS_TEST_MODE && import.meta.env.PROD) {
-  throw new Error('SECURITY ERROR: Test mode cannot be enabled in production builds')
+export const IS_E2E_MODE =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_E2E_MODE === 'true' &&
+  import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
+
+export const E2E_ADMIN_PASSWORD = import.meta.env.VITE_E2E_ADMIN_PASSWORD || 'e2e-admin-password'
+
+// Failsafe: E2E mode must never be enabled in production builds.
+if (IS_E2E_MODE && import.meta.env.PROD) {
+  throw new Error('SECURITY ERROR: E2E mode cannot be enabled in production builds')
 }
 
 // Initialize Firebase
@@ -37,7 +40,7 @@ export const googleProvider = new GoogleAuthProvider()
 
 // Connect to Firebase emulators ONLY in development mode
 // import.meta.env.DEV ensures this code is completely removed in production builds
-if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+if (IS_EMULATOR_MODE) {
   console.log('🔧 Connecting to Firebase emulators...')
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, 'localhost', 8081)

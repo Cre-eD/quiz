@@ -23,6 +23,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
   const LeaveButton = () => (
     <button
       onClick={onLeaveSession}
+      data-testid="player-leave-btn"
       className="absolute top-4 right-4 glass px-4 py-2 rounded-xl text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all z-10"
     >
       <i className="fa fa-sign-out-alt mr-2"></i>
@@ -104,6 +105,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
     const myAnswer = session?.answers?.[user?.uid]
     const wasCorrect = myAnswer?.answerIndex === question?.correct
     const multiplier = getMultiplier(myStreak)
+    const gotFirstBlood = session?.firstBloodWinnerUid === user?.uid
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative">
@@ -126,7 +128,12 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
         {!wasCorrect && (
           <p className="text-slate-500 text-sm mb-2">Streak reset</p>
         )}
-        <p key={scorePopKey} className="text-2xl text-blue-400 font-bold mb-4 animate-number-pop">{myScore} pts</p>
+        {gotFirstBlood && (
+          <p data-testid="player-first-blood-bonus" className="text-sm text-yellow-400 mb-2">
+            🎯 First Blood +30 pts
+          </p>
+        )}
+        <p data-testid="player-results-score" key={scorePopKey} className="text-2xl text-blue-400 font-bold mb-4 animate-number-pop">{myScore} pts</p>
 
         {question?.explanation && (
           <div className="glass rounded-2xl p-4 w-full max-w-md text-left border border-yellow-500/30 animate-slide-up mb-4">
@@ -158,7 +165,7 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
           {/* Question preview */}
           <div className="mb-8">
             <p className="text-slate-500 text-sm mb-3">Question {currentQuestion + 1}</p>
-            <h2 className="text-xl font-semibold text-slate-300 mb-6">{question?.text}</h2>
+            <h2 data-testid="player-question" className="text-xl font-semibold text-slate-300 mb-6">{question?.text}</h2>
           </div>
 
           {/* Animated ready indicator */}
@@ -243,13 +250,14 @@ export default function PlayerGamePage({ session, gamePhase, currentQuestion, us
 
       <div className="text-center mb-6">
         <p className="text-slate-400 mb-2">Question {currentQuestion + 1}</p>
-        <h2 className="text-2xl font-bold">{question?.text}</h2>
+        <h2 data-testid="player-question" className="text-2xl font-bold">{question?.text}</h2>
       </div>
 
       <div className="flex-grow grid grid-cols-2 gap-3">
         {question?.options.map((opt, idx) => (
           <button
             key={idx}
+            data-testid={`player-option-${idx}`}
             disabled={!canSubmit}
             onClick={() => {
               if (!canSubmit) return

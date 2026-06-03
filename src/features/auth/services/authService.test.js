@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // Hoist mocks to avoid initialization errors
 const {
   mockSignInAnonymously,
+  mockSignInWithEmailAndPassword,
   mockSignInWithPopup,
   mockSignInWithRedirect,
   mockGetRedirectResult,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => {
   return {
     mockSignInAnonymously: vi.fn(),
+    mockSignInWithEmailAndPassword: vi.fn(),
     mockSignInWithPopup: vi.fn(),
     mockSignInWithRedirect: vi.fn(),
     mockGetRedirectResult: vi.fn(),
@@ -28,6 +30,7 @@ const {
 // Mock Firebase auth functions
 vi.mock('firebase/auth', () => ({
   signInAnonymously: (...args) => mockSignInAnonymously(...args),
+  signInWithEmailAndPassword: (...args) => mockSignInWithEmailAndPassword(...args),
   signInWithPopup: (...args) => mockSignInWithPopup(...args),
   signInWithRedirect: (...args) => mockSignInWithRedirect(...args),
   getRedirectResult: (...args) => mockGetRedirectResult(...args),
@@ -40,7 +43,8 @@ vi.mock('@/lib/firebase/config', () => ({
   auth: mockAuth,
   googleProvider: mockGoogleProvider,
   ADMIN_EMAIL: MOCK_ADMIN_EMAIL,
-  IS_TEST_MODE: false
+  E2E_ADMIN_PASSWORD: 'e2e-password',
+  IS_E2E_MODE: false
 }))
 
 import {
@@ -49,6 +53,7 @@ import {
   signInWithGoogle,
   handleRedirectResult,
   validateAdminAccess,
+  e2eLoginAdmin,
   signOut,
   onAuthStateChanged,
   getCurrentUser
@@ -347,6 +352,12 @@ describe('authService', () => {
       const result = onAuthStateChanged(callback)
 
       expect(result).toBe(unsubscribe)
+    })
+  })
+
+  describe('e2eLoginAdmin', () => {
+    it('throws when e2e mode is disabled', async () => {
+      await expect(e2eLoginAdmin()).rejects.toThrow('E2E auth bridge is disabled')
     })
   })
 

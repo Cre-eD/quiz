@@ -1,171 +1,53 @@
 # Testing Guide
 
-## Overview
+## Test Layers
 
-This project has comprehensive testing at multiple levels:
+1. Unit tests (`vitest`)
+2. Local deterministic E2E (`playwright` + Firebase emulators)
+3. Post-deploy public smoke (`playwright`, no auth flow)
 
-1. **Unit Tests** - Test individual functions and components (Vitest) - 290 passing
-2. **E2E Tests** - Test complete user workflows (Playwright) - 62 passing
+Latest execution/discovery snapshot: `E2E_TEST_SUMMARY.md`.
 
-## Quick Start
+## Commands
 
 ```bash
-# Run all unit tests
+# Unit
 npm test
 
-# Run all E2E tests (production)
+# Local deterministic E2E (default E2E command)
 npm run test:e2e
-```
+npm run test:e2e:local
 
-## E2E Testing with Test Mode ⭐
+# Local admin workflow only
+npm run test:e2e:workflow-admin
 
-For testing authenticated admin features locally without OAuth complexity.
-
-### Quick Start
-
-```bash
-# 1. Start dev server with test mode
-npm run dev:test
-
-# 2. Open browser to http://localhost:5173
-
-# 3. Click "I'm a teacher" and sign in with ANY Google account
-
-# 4. You'll get admin access to test all features
-```
-
-### What Gets Tested
-
-With test mode, you can manually test:
-- ✅ Admin dashboard access
-- ✅ Quiz creation and management
-- ✅ Quiz launching (host lobby)
-- ✅ Leaderboard management
-- ✅ Course/year filtering
-- ✅ All admin workflows
-
-### Security
-
-Test mode is **100% safe** for production:
-- Only works in development builds (`import.meta.env.DEV`)
-- Code is completely removed from production bundles (verified)
-- Firestore rules still enforce server-side validation
-- See [SECURITY.md](./SECURITY.md) for details
-
-### Automated E2E Tests
-
-Run automated tests against test mode:
-
-```bash
-# With dev server running in test mode:
-npm run test:e2e:test-mode
-```
-
-## Unit Tests
-
-### Running Unit Tests
-
-```bash
-# Run once
-npm test
-
-# Watch mode (re-run on changes)
-npm run test:watch
-
-# With coverage report
-npm run test:coverage
-
-# Interactive UI
-npm run test:ui
-```
-
-### Coverage
-
-Current coverage:
-- **Services**: 100% (authentication, quiz, session, leaderboard)
-- **Utils**: 100% (validation, sanitization)
-- **Total**: 290 tests passing
-
-## E2E Tests (Production)
-
-Tests public features without authentication.
-
-### Running
-
-```bash
-# All tests
-npm run test:e2e
-
-# Headed mode (see browser)
+# Debug local E2E
 npm run test:e2e:headed
-
-# Debug mode
 npm run test:e2e:debug
-
-# UI mode (interactive)
 npm run test:e2e:ui
 
-# Specific test
-npm run test:e2e -- session-join.spec.js
-
-# Generate HTML report
-npm run test:e2e:report
+# Public smoke after deploy
+TEST_URL=https://your-url npm run test:e2e:prod-smoke
 ```
 
-### What's Tested
+## Local E2E Environment
 
-**62 passing tests covering:**
-- Homepage and navigation (15 tests)
-- Player join flow (11 tests)
-- Accessibility/WCAG (24 tests)
-- Performance metrics (10 tests)
-- Mobile responsive (3 tests)
-- Game flow & security (14 tests)
+`npm run test:e2e:local` starts Auth + Firestore emulators and runs:
 
-### Test Files
+- `scripts/e2e/seed-emulators.mjs`
+- local Vite app in E2E mode (`npm run dev:e2e`)
+- Playwright with `playwright.local.config.js`
 
-- `smoke.spec.js` - Production build validation
-- `session-join.spec.js` - Player join flow & validation
-- `quiz-navigation.spec.js` - Navigation and UI
-- `game-flow.spec.js` - Game mechanics, error handling, security
-- `accessibility.spec.js` - WCAG compliance, performance, mobile
+Seeded admin user email must match rules:
 
-## OAuth Tests (Optional)
+- `creeed22@gmail.com`
 
-For testing production OAuth flow:
+## Security Expectations
 
-```bash
-# One-time setup (requires manual sign-in)
-npx playwright test auth.setup.js --headed
+- E2E bridge (`window.__E2E_AUTH__`) is local-only.
+- Local seeding fails outside approved emulator/project guards.
+- `scripts/validate-build.sh` blocks deploy on emulator/test-hook leaks.
 
-# Then run authenticated tests
-npm run test:e2e -- workflow-auth.spec.js
-```
+## Legacy Note
 
-**Note:** Skipped in CI/WSL environments. Test mode is recommended for local testing.
-
-## Test Reports
-
-View detailed HTML reports:
-
-```bash
-npm run test:e2e:report
-```
-
-Opens browser with:
-- Test results and timing
-- Screenshots of failures
-- Detailed error context
-- Performance metrics
-
-## Continuous Integration
-
-Tests run automatically on every push:
-- Unit tests (all 290)
-- E2E tests (all 62 public tests)
-- OAuth tests skipped (require manual auth)
-
-## For More Details
-
-- [e2e/README.md](./e2e/README.md) - Comprehensive E2E testing guide
-- [SECURITY.md](./SECURITY.md) - Test mode security documentation
+`tests/` is deprecated for Playwright coverage. Active suite is `e2e/`.

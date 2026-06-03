@@ -1,234 +1,83 @@
-# E2E Test Suite Summary
+# E2E Test Refactor Summary
 
-## Overview
-Comprehensive end-to-end testing covering all critical user flows, accessibility, performance, and error handling.
+## Scope Implemented
 
-**Total Tests:** 64
-**Passing:** 53
-**Failing:** 11 (mostly timing/auth-related, fixable)
+- Local-first deterministic E2E flow on Firebase emulators.
+- Post-deploy suite reduced to public smoke only (no auth checks).
+- Dev-only hidden auth bridge for local admin automation:
+  - `window.__E2E_AUTH__.loginAdmin()`
+  - `window.__E2E_AUTH__.logout()`
+- Legacy manual OAuth storage-state workflow removed from default automation.
 
-## Test Coverage
+## Current Topology
 
-### 1. Session Join Flow (`session-join.spec.js`) - 11 tests
-Tests player joining experience and validation:
-- ✅ Form validation (empty fields, invalid format)
-- ✅ PIN format restrictions (4 digits, numbers only)
-- ✅ Name input validation (special characters, length limits)
-- ✅ Non-existent session handling
-- ✅ Teacher button navigation
-- ✅ Multiple rapid clicks handling
-- ⚠️ Some timing issues with toast notifications (fixable)
+- Local config: `playwright.local.config.js`
+  - `baseURL`: `http://127.0.0.1:4173`
+  - `workers: 1`
+  - `fullyParallel: false`
+  - `webServer`: `npm run dev:e2e`
+- Prod config: `playwright.prod.config.js`
+  - test match: `e2e/smoke.spec.js`
+  - `baseURL`: `TEST_URL` (fallback production URL)
 
-### 2. Quiz Navigation (`quiz-navigation.spec.js`) - 15 tests
-Tests homepage and navigation without authentication:
-- ✅ All required elements display correctly
-- ✅ No console errors on load
-- ✅ Responsive design (mobile, tablet, desktop)
-- ✅ No JavaScript errors
-- ✅ Images and icons load correctly
-- ✅ CSS styling applied
-- ✅ Keyboard navigation
-- ✅ Dashboard access control
+## Local E2E Bootstrap
 
-### 3. Game Flow (`game-flow.spec.js`) - 14 tests
-Tests player game experience and error handling:
-- ✅ localStorage session persistence
-- ✅ Session restoration attempts
-- ✅ Page reload handling
-- ✅ Browser back button
-- ✅ Multiple tabs with same session
-- ✅ Network offline simulation
-- ✅ Session timeout handling
-- ✅ Invalid session data handling
-- ✅ XSS protection in player names
-- ✅ Long name handling
-- ✅ Special characters and emoji support
-- ✅ Error boundary tests
+- Emulator seed script: `scripts/e2e/seed-emulators.mjs`
+- Seeded admin user email (matches rules): `creeed22@gmail.com`
+- Seeded quiz id: `e2e-seeded-quiz`
+- Hard guards:
+  - requires `FIREBASE_AUTH_EMULATOR_HOST`
+  - requires `FIRESTORE_EMULATOR_HOST` on `8081`
+  - refuses non-approved project IDs (only `demo-project`)
+  - refuses non-local emulator hosts
 
-### 4. Accessibility (`accessibility.spec.js`) - 16 tests
-Tests WCAG compliance and accessibility features:
-- ✅ Keyboard navigation (all interactive elements)
-- ✅ Form labels and placeholders
-- ✅ Descriptive button text
-- ✅ Focus visibility
-- ✅ Image alt text
-- ✅ Color contrast
-- ✅ Proper heading structure (single h1)
-- ✅ HTML lang attribute
-- ⚠️ Touch interactions (needs hasTouch context)
+## Commands
 
-### 5. Performance Tests (`accessibility.spec.js`) - 8 tests
-Tests loading speed and performance metrics:
-- ✅ Page loads < 3 seconds
-- ✅ Fast initial render (DOM content loaded < 1s)
-- ✅ No large layout shifts (CLS = 0)
-- ✅ Reasonable JS bundle size
-- ✅ CSS loaded and applied
-- ✅ Fonts load correctly
-- ✅ No memory leaks on navigation
+- Default E2E: `npm run test:e2e` (alias to local)
+- Local full run: `npm run test:e2e:local`
+- Local admin workflow only: `npm run test:e2e:workflow-admin`
+- Post-deploy smoke: `npm run test:e2e:prod-smoke`
+- Safe pipeline: `npm run deploy:safe`
 
-### 6. Mobile Experience (`accessibility.spec.js`) - 3 tests
-Tests mobile responsiveness:
-- ✅ No horizontal scroll
-- ✅ Adequate touch target sizes (≥40px)
-- ⚠️ Touch interactions (fixable - needs context option)
+## Security Hardening
 
-### 7. Smoke Tests (`smoke.spec.js`) - 5 tests
-Production build validation:
-- ✅ Homepage loads without errors
-- ✅ No emulator configuration in production
-- ✅ Form interactions work
-- ✅ Critical imports loaded
-- ✅ Dashboard renders for unauthenticated users
+- Build validation now fails if `dist` contains:
+  - `localhost:9099`
+  - `localhost:8081`
+  - `__E2E_AUTH__`
+  - `VITE_E2E_MODE`
+- Legacy `8080` leak check retained as extra safeguard.
+- Firestore production auth model unchanged in this refactor.
 
-### 8. Workflow Tests (`workflow.spec.js`) - 3 tests
-Full quiz workflow validation:
-- ✅ Homepage basic validation
-- ✅ Form interactions
-- ⚠️ Full workflow (requires manual OAuth - expected)
+## Current Verification Snapshot (2026-02-18)
 
-## Test Results Summary
+- `npm test -- --run` ✅ (`300` tests passed)
+- `npm run build` ✅
+- `bash scripts/validate-build.sh` ✅
+- `npx playwright test --config=playwright.local.config.js --list` ✅ (`61` tests discovered)
+- `npm run test:e2e:prod-smoke -- --list` ✅ (`4` tests discovered)
 
-### ✅ Passing (53/64)
-- All smoke tests pass
-- All accessibility tests pass (except touch)
-- All performance tests pass
-- Most game flow tests pass
-- Most session join tests pass
-- Quiz navigation tests pass
+## Stability Fixes Applied After Local Failure Report
 
-### ⚠️ Failing (11/64)
-**Fixable Issues:**
-1. Touch interactions - needs `hasTouch` context in playwright config
-2. Keyboard navigation detection - timing issue with focus detection
-3. Console errors test - detecting expected join errors
-4. Join button test - test logic issue
-5. Browser back button - timing issue
-6. Join validation tests (3 tests) - waiting for toast notifications that appear/disappear quickly
+- `e2e/workflow-auth.spec.js` timeout root cause fixed:
+  - `src/features/auth/hooks/useAuth.js` now recomputes `isAdmin` inside `onAuthStateChanged`.
+  - E2E email login now transitions dashboard state correctly.
+- `e2e/workflow-auth.spec.js` launch-button flake reduced:
+  - first tab test no longer assumes seeded quiz button must already be visible,
+  - dashboard helper now waits for quizzes tab to resolve to either launchable quizzes or explicit empty state.
+- `src/views/DashboardPage.jsx` now exposes stable empty-state selectors:
+  - `dash-no-quizzes`
+  - `dash-create-quiz-btn`
+- `e2e/accessibility.spec.js`:
+  - heading structure check now waits for semantic headings (`h1/h2/h3`) instead of assuming immediate `h1`.
+  - JS bundle-size check now uses a dev-aware threshold for Vite module mode.
+- `e2e/quiz-navigation.spec.js`:
+  - auth-smoke assertion now accepts both valid outcomes:
+    - redirect to external auth provider, or
+    - app shell remains visible without crash,
+    - and explicitly asserts no uncaught page errors in this flow.
 
-**Expected Failure:**
-7. Full workflow test - requires manual Google OAuth (by design)
+## Environment Limitation Seen Here
 
-## Performance Metrics
-
-### Loading Performance
-- **Page Load Time:** < 1.7s average
-- **DOM Content Loaded:** < 1s
-- **Cumulative Layout Shift:** 0 (excellent!)
-- **Memory Usage:** ~9.5 MB
-
-### Bundle Sizes
-- **Total JS Bundle:** 868 KB (production)
-- **CSS Bundle:** 33 KB
-- **HTML:** 0.63 KB
-
-## Security & Quality
-
-### Security Tests Passing
-- ✅ XSS protection in user inputs
-- ✅ Input sanitization
-- ✅ No emulator code in production
-- ✅ Network error handling
-- ✅ Invalid session data handling
-
-### Code Quality Indicators
-- ✅ No console errors on normal use
-- ✅ Error boundaries present
-- ✅ Proper error handling throughout
-- ✅ No memory leaks detected
-- ✅ Responsive design working
-
-## Recommended Fixes
-
-### High Priority
-1. **Fix touch interaction test:**
-   ```javascript
-   // In playwright.config.js
-   use: {
-     hasTouch: true,
-     // ...other options
-   }
-   ```
-
-2. **Adjust timing for toast notification tests:**
-   - Increase waitForTimeout to catch quick toasts
-   - Or use proper toast element selectors
-
-### Medium Priority
-3. **Fix keyboard navigation focus detection:**
-   - Add explicit wait for focus events
-   - Use more reliable focus detection method
-
-4. **Stabilize browser back button test:**
-   - Add explicit navigation wait
-   - Check for URL changes instead of element visibility
-
-### Low Priority
-5. **Console errors test:**
-   - Filter out expected errors from failed join attempts
-   - Only fail on unexpected errors
-
-## Running Tests
-
-```bash
-# Run all E2E tests
-npm run test:e2e
-
-# Run specific test file
-npm run test:e2e -- session-join.spec.js
-
-# Run in headed mode (see browser)
-npm run test:e2e:headed
-
-# Run in UI mode (interactive)
-npm run test:e2e:ui
-
-# Run with specific browser
-npm run test:e2e -- --project=chromium
-
-# Generate HTML report
-npm run test:e2e:report
-```
-
-## Coverage Analysis
-
-### Well Covered
-- ✅ Homepage and public pages
-- ✅ Form validation and input handling
-- ✅ Error handling and edge cases
-- ✅ Accessibility and keyboard navigation
-- ✅ Performance and loading
-- ✅ Mobile responsiveness
-- ✅ Security (XSS, input sanitization)
-
-### Needs More Coverage (Requires Auth)
-- ⚠️ Full quiz creation flow
-- ⚠️ Quiz editing and deletion
-- ⚠️ Leaderboard management
-- ⚠️ Session hosting
-- ⚠️ Live gameplay with multiple players
-
-## Next Steps
-
-1. Fix the 11 failing tests (most are minor timing/config issues)
-2. Add authenticated E2E tests using:
-   - Playwright's `storageState` for session persistence
-   - Or mock Firebase auth for testing
-3. Add tests for new leaderboard filtering feature
-4. Add visual regression testing (Playwright screenshots)
-5. Add API mocking for more reliable tests
-6. Set up CI/CD to run tests on every PR
-
-## Conclusion
-
-The E2E test suite provides comprehensive coverage of:
-- ✅ User flows (joining, navigation)
-- ✅ Error handling and edge cases
-- ✅ Accessibility (WCAG compliance)
-- ✅ Performance (loading, rendering)
-- ✅ Security (XSS, input validation)
-- ✅ Responsive design (mobile, tablet, desktop)
-- ✅ Browser compatibility
-
-**Success Rate:** 83% (53/64 passing)
-**With Fixes:** Expected 95%+ (61/64 passing, only OAuth test would fail)
+- Full `npm run test:e2e:local` execution was blocked in this sandbox by emulator port bind permissions (`EPERM` on `9099`, `8081`, and hub ports).
+- On a normal local dev machine, run `npm run test:e2e:local` to validate end-to-end execution.

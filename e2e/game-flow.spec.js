@@ -12,11 +12,10 @@
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:4173'
 
 test.describe('Game Flow - Player Experience', () => {
   test('localStorage session restoration attempt', async ({ page, context }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Try to set a fake session in localStorage
     await context.addInitScript(() => {
@@ -39,14 +38,14 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Session state persists in localStorage', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Fill join form
-    await page.locator('input[placeholder="PIN"]').fill('1234')
-    await page.locator('input[placeholder*="Nickname"]').fill('TestPlayer')
+    await page.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page.locator('[data-testid="home-name-input"]').fill('TestPlayer')
 
     // Try to join (will fail but should store attempt)
-    await page.locator('button:has-text("Join Game")').click()
+    await page.locator('[data-testid="home-join-btn"]').click()
 
     await page.waitForTimeout(1000)
 
@@ -61,28 +60,28 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Page reload during join does not crash', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Fill form
-    await page.locator('input[placeholder="PIN"]').fill('1234')
-    await page.locator('input[placeholder*="Nickname"]').fill('TestPlayer')
+    await page.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page.locator('[data-testid="home-name-input"]').fill('TestPlayer')
 
     // Click join and immediately reload
-    await page.locator('button:has-text("Join Game")').click()
+    await page.locator('[data-testid="home-join-btn"]').click()
     await page.reload()
 
     // Should load without errors
     await expect(page.locator('h1')).toBeVisible()
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
   })
 
   test('Browser back button during join flow', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Fill and submit form with non-existent session
-    await page.locator('input[placeholder="PIN"]').fill('9999')
-    await page.locator('input[placeholder*="Nickname"]').fill('TestPlayer')
-    await page.locator('button:has-text("Join Game")').click()
+    await page.locator('[data-testid="home-pin-input"]').fill('9999')
+    await page.locator('[data-testid="home-name-input"]').fill('TestPlayer')
+    await page.locator('[data-testid="home-join-btn"]').click()
 
     // Wait for error response
     await page.waitForTimeout(3000)
@@ -92,42 +91,51 @@ test.describe('Game Flow - Player Experience', () => {
 
     // Since no navigation occurred, back button won't do anything
     // Just verify the page is still functional
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
-    await expect(page.locator('input[placeholder*="Nickname"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-name-input"]')).toBeVisible()
   })
 
-  test('Multiple tabs with same session', async ({ context }) => {
+  test('Multiple tabs with same session', async ({ browser }) => {
+    // Use separate contexts to prevent auth/session leakage between simulated users.
+    const context1 = await browser.newContext()
+    const context2 = await browser.newContext()
+
     // Create first tab
-    const page1 = await context.newPage()
-    await page1.goto(BASE_URL)
+    const page1 = await context1.newPage()
+    await page1.goto('/')
 
     // Fill form in first tab
-    await page1.locator('input[placeholder="PIN"]').fill('1234')
-    await page1.locator('input[placeholder*="Nickname"]').fill('Player1')
+    await page1.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page1.locator('[data-testid="home-name-input"]').fill('Player1')
 
     // Create second tab
-    const page2 = await context.newPage()
-    await page2.goto(BASE_URL)
+    const page2 = await context2.newPage()
+    await page2.goto('/')
 
     // Fill form in second tab with different data
-    await page2.locator('input[placeholder="PIN"]').fill('5678')
-    await page2.locator('input[placeholder*="Nickname"]').fill('Player2')
+    await page2.locator('[data-testid="home-pin-input"]').fill('5678')
+    await page2.locator('[data-testid="home-name-input"]').fill('Player2')
 
     // Both tabs should maintain their own state
-    await expect(page1.locator('input[placeholder="PIN"]')).toHaveValue('1234')
-    await expect(page2.locator('input[placeholder="PIN"]')).toHaveValue('5678')
+    await expect(page1.locator('[data-testid="home-pin-input"]')).toHaveValue('1234')
+    await expect(page2.locator('[data-testid="home-pin-input"]')).toHaveValue('5678')
+
+    await page1.close()
+    await page2.close()
+    await context1.close()
+    await context2.close()
   })
 
   test('Network offline simulation', async ({ page, context }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Go offline
     await context.setOffline(true)
 
     // Try to join
-    await page.locator('input[placeholder="PIN"]').fill('1234')
-    await page.locator('input[placeholder*="Nickname"]').fill('TestPlayer')
-    await page.locator('button:has-text("Join Game")').click()
+    await page.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page.locator('[data-testid="home-name-input"]').fill('TestPlayer')
+    await page.locator('[data-testid="home-join-btn"]').click()
 
     await page.waitForTimeout(2000)
 
@@ -140,7 +148,7 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Session timeout handling', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Set a very old session in localStorage
     await page.evaluate(() => {
@@ -158,11 +166,11 @@ test.describe('Game Flow - Player Experience', () => {
 
     // Old session should be cleared or ignored
     // Should show join form, not stuck in loading
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
   })
 
   test('Invalid session data in localStorage', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Set invalid JSON in localStorage
     await page.evaluate(() => {
@@ -176,20 +184,20 @@ test.describe('Game Flow - Player Experience', () => {
 
     // Should clear invalid data and show join form
     await expect(page.locator('h1')).toBeVisible()
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
   })
 
   test('XSS protection in player name', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Try to inject script tag
     const maliciousName = '<script>alert("XSS")</script>'
 
-    await page.locator('input[placeholder="PIN"]').fill('1234')
-    await page.locator('input[placeholder*="Nickname"]').fill(maliciousName)
+    await page.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page.locator('[data-testid="home-name-input"]').fill(maliciousName)
 
     // Submit
-    await page.locator('button:has-text("Join Game")').click()
+    await page.locator('[data-testid="home-join-btn"]').click()
 
     await page.waitForTimeout(1000)
 
@@ -203,12 +211,12 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Very long player name handling', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Try extremely long name
     const longName = 'A'.repeat(1000)
 
-    const nameInput = page.locator('input[placeholder*="Nickname"]')
+    const nameInput = page.locator('[data-testid="home-name-input"]')
     await nameInput.fill(longName)
 
     // Should be truncated or validated
@@ -219,13 +227,13 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Special characters in player name', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Try special characters
-    await page.locator('input[placeholder*="Nickname"]').fill('Test™️ 你好 🎮')
+    await page.locator('[data-testid="home-name-input"]').fill('Test™️ 你好 🎮')
 
     // Should accept or sanitize
-    const nameInput = page.locator('input[placeholder*="Nickname"]')
+    const nameInput = page.locator('[data-testid="home-name-input"]')
     const value = await nameInput.inputValue()
 
     // Should have some value (might be sanitized)
@@ -233,11 +241,11 @@ test.describe('Game Flow - Player Experience', () => {
   })
 
   test('Emoji in player name', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
-    await page.locator('input[placeholder*="Nickname"]').fill('Player🔥')
+    await page.locator('[data-testid="home-name-input"]').fill('Player🔥')
 
-    const nameInput = page.locator('input[placeholder*="Nickname"]')
+    const nameInput = page.locator('[data-testid="home-name-input"]')
     const value = await nameInput.inputValue()
 
     // Should accept emoji
@@ -247,7 +255,7 @@ test.describe('Game Flow - Player Experience', () => {
 
 test.describe('Error Boundary Tests', () => {
   test('App has error boundary', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // App should load without crashing
     await expect(page.locator('h1')).toBeVisible()
@@ -263,11 +271,11 @@ test.describe('Error Boundary Tests', () => {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Just navigate around (don't trigger expected errors like failed join)
-    await page.locator('input[placeholder="PIN"]').fill('1234')
-    await page.locator('input[placeholder*="Nickname"]').fill('Test')
+    await page.locator('[data-testid="home-pin-input"]').fill('1234')
+    await page.locator('[data-testid="home-name-input"]').fill('Test')
 
     await page.waitForTimeout(1000)
 

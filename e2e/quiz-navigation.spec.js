@@ -9,29 +9,28 @@
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:4173'
 
 test.describe('Quiz Navigation (Unauthenticated)', () => {
   test('Homepage displays all required elements', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Main title
     await expect(page.locator('h1')).toContainText('LectureQuiz')
 
     // Join form
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
-    await expect(page.locator('input[placeholder*="Nickname"]')).toBeVisible()
-    await expect(page.locator('button:has-text("Join Game")')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-name-input"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-join-btn"]')).toBeVisible()
 
     // Teacher button
-    await expect(page.locator('button:has-text("teacher")')).toBeVisible()
+    await expect(page.locator('[data-testid="home-teacher-btn"]')).toBeVisible()
   })
 
   test('Page has no console errors on load', async ({ page }) => {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Wait for page to fully load
     await page.waitForTimeout(2000)
@@ -40,7 +39,7 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
   })
 
   test('Page has correct meta tags', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Check title
     const title = await page.title()
@@ -56,34 +55,34 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 })
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Elements should still be visible on mobile
     await expect(page.locator('h1')).toBeVisible()
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
-    await expect(page.locator('button:has-text("Join Game")')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-join-btn"]')).toBeVisible()
   })
 
   test('Responsive design - tablet viewport', async ({ page }) => {
     // Set tablet viewport
     await page.setViewportSize({ width: 768, height: 1024 })
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Elements should be visible on tablet
     await expect(page.locator('h1')).toBeVisible()
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
   })
 
   test('Responsive design - desktop viewport', async ({ page }) => {
     // Set desktop viewport
     await page.setViewportSize({ width: 1920, height: 1080 })
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Elements should be visible on desktop
     await expect(page.locator('h1')).toBeVisible()
-    await expect(page.locator('input[placeholder="PIN"]')).toBeVisible()
+    await expect(page.locator('[data-testid="home-pin-input"]')).toBeVisible()
   })
 
   test('No JavaScript errors in console', async ({ page }) => {
@@ -102,7 +101,7 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
       }
     })
 
-    await page.goto(BASE_URL)
+    await page.goto('/')
     await page.waitForTimeout(2000)
 
     // Should have no unexpected JavaScript errors
@@ -110,7 +109,7 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
   })
 
   test('Images and icons load correctly', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Wait for page to load
     await page.waitForTimeout(1000)
@@ -121,7 +120,7 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
   })
 
   test('CSS styling is applied', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Check that main container has background styling
     const body = page.locator('body')
@@ -132,7 +131,7 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
   })
 
   test('Keyboard navigation works', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Wait for page to be interactive
     await page.waitForLoadState('networkidle')
@@ -154,9 +153,9 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
   })
 
   test('Enter key in PIN input moves focus', async ({ page }) => {
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
-    const pinInput = page.locator('input[placeholder="PIN"]')
+    const pinInput = page.locator('[data-testid="home-pin-input"]')
     await pinInput.click()
     await pinInput.fill('1234')
 
@@ -173,29 +172,31 @@ test.describe('Quiz Navigation (Unauthenticated)', () => {
 
 test.describe('Quiz Dashboard Smoke Tests', () => {
   test('Dashboard requires authentication', async ({ page }) => {
-    await page.goto(BASE_URL)
+    const pageErrors = []
+    page.on('pageerror', (error) => pageErrors.push(error.message))
 
-    // Click teacher button (without actually signing in)
-    await page.locator('button:has-text("teacher")').click()
+    await page.goto('/')
 
-    // Wait for any auth flow
-    await page.waitForTimeout(3000)
+    // Click teacher button. Depending on browser/popup behavior this may:
+    // 1) stay on app shell, or 2) redirect to auth provider.
+    await page.locator('[data-testid="home-teacher-btn"]').click()
+    await page.waitForTimeout(1500)
 
-    // Should show either:
-    // 1. Still on homepage (auth cancelled)
-    // 2. Access denied message
-    // 3. Dashboard (if already authenticated from previous test)
-    const isOnHomepage = await page.locator('h1:has-text("LectureQuiz")').isVisible({ timeout: 3000 }).catch(() => false)
-    const isOnDashboard = await page.locator('h2:has-text("Dashboard")').isVisible({ timeout: 3000 }).catch(() => false)
-    const hasContent = await page.locator('h1, h2, h3').first().isVisible({ timeout: 3000 }).catch(() => false)
+    const url = page.url()
+    const redirectedAwayFromApp = !url.startsWith('http://127.0.0.1:4173')
+    const hasRenderableUi = await page.evaluate(() => {
+      const body = document.body
+      return Boolean(body && body.innerText && body.innerText.trim().length > 0)
+    }).catch(() => false)
+    const popupOpened = page.context().pages().length > 1
 
-    // App should be functional (not crash)
-    expect(isOnHomepage || isOnDashboard || hasContent).toBe(true)
+    expect(redirectedAwayFromApp || hasRenderableUi || popupOpened).toBe(true)
+    expect(pageErrors).toEqual([])
   })
 
   test('Quiz editor not accessible without auth', async ({ page }) => {
     // Try to access dashboard directly
-    await page.goto(BASE_URL)
+    await page.goto('/')
 
     // Without auth, should not see quiz editor elements
     const hasEditButton = await page.locator('button:has-text("Edit")').isVisible().catch(() => false)

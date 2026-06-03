@@ -70,7 +70,7 @@ export default function LaunchQuizModal({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+      <div data-testid="launch-modal" className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
         <div className="glass p-8 rounded-3xl max-w-2xl w-full mx-4 animate-bounce-in max-h-[90vh] overflow-y-auto">
           <h3 className="text-2xl font-bold mb-2"><i className="fa fa-play text-green-500 mr-2"></i>Launch Quiz</h3>
           <p className="text-slate-400 mb-6">{quiz.title}</p>
@@ -198,12 +198,14 @@ export default function LaunchQuizModal({
           <div className="flex gap-3">
             <button
               onClick={onCancel}
+              data-testid="launch-cancel-btn"
               className="flex-1 bg-slate-800 py-3 rounded-xl font-semibold hover:bg-slate-700"
             >
               Cancel
             </button>
             <button
               onClick={onLaunch}
+              data-testid="launch-confirm-btn"
               className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 py-3 rounded-xl font-semibold hover:from-green-500 hover:to-emerald-500"
             >
               <i className="fa fa-play mr-2"></i>Launch

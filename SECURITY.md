@@ -1,84 +1,40 @@
-# Security Documentation
+# Security Notes
 
-## Test Mode Security
+## Local E2E Auth Bridge
 
-### What is Test Mode?
+This project includes a hidden E2E auth bridge for deterministic local tests:
 
-Test mode is a **development-only** feature that allows E2E testing of admin features without OAuth complexity.
+- `window.__E2E_AUTH__.loginAdmin()`
+- `window.__E2E_AUTH__.logout()`
 
-### Security Guarantees
+It is intentionally restricted to local emulator runs.
 
-Test mode CANNOT be enabled in production. Triple-layer protection:
+## Enable Conditions
 
-1. **Build-time check** - `import.meta.env.DEV` is false in production builds
-2. **Explicit flag** - Requires `VITE_TEST_MODE=true` 
-3. **Mode check** - Cannot be production mode
-4. **Tree-shaking** - Vite removes test mode code entirely from production bundles
+The bridge is enabled only when all are true:
 
-### How to Use
+1. `import.meta.env.DEV === true`
+2. `VITE_E2E_MODE === "true"`
+3. `VITE_USE_FIREBASE_EMULATOR === "true"`
 
-**Local Testing (Development):**
-```bash
-# Start dev server with test mode
-npm run dev:test
+If these are not satisfied, the bridge is not registered.
 
-# Or manually:
-VITE_TEST_MODE=true npm run dev
+## Production Safety
 
-# Sign in with ANY Google account
-# You'll get admin access for testing
-```
+- Production auth model is unchanged (admin email check in Firestore rules).
+- The E2E bridge is designed to be stripped from production bundle paths.
+- Build validation fails deployment if production bundle contains:
+  - `localhost:9099`
+  - `localhost:8081`
+  - `__E2E_AUTH__`
+  - `VITE_E2E_MODE`
 
-**What Test Mode Does:**
-- Grants admin UI access to any authenticated (non-anonymous) user
-- Allows testing dashboard, quiz management, leaderboards
-- **Does NOT bypass Firestore security rules** (server-side validation still applies)
+## Local Seeding Guards
 
-**What Test Mode Does NOT Do:**
-- Work in production builds (code is removed)
-- Bypass server-side Firestore rules
-- Compromise data security
+`scripts/e2e/seed-emulators.mjs` refuses to run unless:
 
-### Verification
+- `FIREBASE_AUTH_EMULATOR_HOST` is set
+- `FIRESTORE_EMULATOR_HOST` is set and uses port `8081`
+- project id is explicitly allowed (`demo-project`)
 
-Verify test mode is removed from production build:
-
-```bash
-npm run build
-grep -r "IS_TEST_MODE\|Test mode" dist/
-
-# Expected: no matches (code removed by tree-shaking)
-```
-
-### Deployment Safety
-
-✅ `.env.test.local` is in `.gitignore`
-✅ Never set `VITE_TEST_MODE=true` in production env
-✅ Firestore rules enforce server-side admin checks
-✅ Production builds automatically disable test mode
-
-### Firestore Security (Real Protection)
-
-Client-side admin check is just for UX. **Real security is server-side:**
-
-```javascript
-// firestore.rules - Server-side validation
-match /quizzes/{quizId} {
-  allow write: if request.auth != null
-    && request.auth.token.email == 'admin@example.com';
-}
-```
-
-Test mode only affects client UI, not Firestore rules.
-
-### Threat Model
-
-**Attack: Enable test mode in production**
-- Result: Fails - code doesn't exist in production bundle
-
-**Attack: Modify bundle to enable test mode**
-- Result: UI shows but Firestore rules block all writes
-
-**Attack: Bypass client check**
-- Result: Firestore rules still enforce admin email check
-
+This prevents accidental writes outside local emulators.

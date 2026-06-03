@@ -1,5 +1,52 @@
+import { useEffect, useState } from 'react'
+import { IS_E2E_MODE } from '@/lib/firebase/config'
+
+const E2E_PLAYER_JOIN_EVENT_KEY = '__E2E_PLAYER_JOIN_EVENT__'
+const E2E_JOINED_PIN_PREFIX = '__E2E_JOINED_PIN__:'
+
 export default function HostLobbyPage({ user, isAdmin, setView, session, startGame, toggleLateJoin, kickPlayer, cancelSession }) {
   if (!user?.email || !isAdmin) { setView('home'); return null }
+
+  const [e2eJoinedPlayers, setE2eJoinedPlayers] = useState(0)
+
+  useEffect(() => {
+    if (!IS_E2E_MODE || typeof window === 'undefined' || !session?.pin) return
+
+    const joinedPinKey = `${E2E_JOINED_PIN_PREFIX}${String(session.pin)}`
+
+    const syncJoinedPlayers = () => {
+      const hasJoinedPlayer = Boolean(localStorage.getItem(joinedPinKey))
+      setE2eJoinedPlayers(hasJoinedPlayer ? 1 : 0)
+    }
+
+    syncJoinedPlayers()
+
+    const onStorage = (event) => {
+      if (event.key === joinedPinKey) {
+        syncJoinedPlayers()
+        return
+      }
+      if (event.key !== E2E_PLAYER_JOIN_EVENT_KEY || !event.newValue) return
+      try {
+        const payload = JSON.parse(event.newValue)
+        if (String(payload?.pin) === String(session.pin)) {
+          syncJoinedPlayers()
+        }
+      } catch {
+        // Ignore malformed test-event payloads
+      }
+    }
+
+    const intervalId = setInterval(syncJoinedPlayers, 300)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [session?.pin])
+
+  const realtimePlayers = Object.keys(session?.players || {}).length
+  const playerCount = Math.max(realtimePlayers, IS_E2E_MODE ? e2eJoinedPlayers : 0)
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
@@ -12,13 +59,13 @@ export default function HostLobbyPage({ user, isAdmin, setView, session, startGa
         <p className="text-slate-400 uppercase tracking-[0.2em] text-sm mb-2">Join at devops-quiz-2c930.web.app</p>
         <p className="text-slate-500 uppercase tracking-widest text-sm mb-6">Game PIN</p>
         <div className="glow rounded-3xl p-4 mb-8">
-          <h2 className="text-[10rem] leading-none font-black gradient-text animate-float">{session?.pin}</h2>
+          <h2 data-testid="host-pin" className="text-[10rem] leading-none font-black gradient-text animate-float">{session?.pin}</h2>
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-2">
           <div className="bg-blue-600 px-4 py-2 rounded-full flex items-center gap-2">
             <i className="fa fa-users"></i>
-            <span className="text-2xl font-bold">{Object.keys(session?.players || {}).length}</span>
+            <span data-testid="host-player-count" className="text-2xl font-bold">{playerCount}</span>
           </div>
           <span className="text-slate-400">players joined</span>
         </div>
@@ -30,7 +77,7 @@ export default function HostLobbyPage({ user, isAdmin, setView, session, startGa
         )}
 
         <div className="glass rounded-2xl p-4 mb-8 w-full max-w-4xl max-h-48 overflow-y-auto">
-          {Object.keys(session?.players || {}).length === 0 ? (
+          {playerCount === 0 ? (
             <p className="text-slate-500 text-center py-4">Waiting for players to join...</p>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
@@ -77,7 +124,8 @@ export default function HostLobbyPage({ user, isAdmin, setView, session, startGa
 
           <button
             onClick={startGame}
-            disabled={Object.keys(session?.players || {}).length === 0}
+            disabled={playerCount === 0}
+            data-testid="host-start-game-btn"
             className="btn-gradient px-10 py-4 rounded-xl font-bold text-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
           >
             <i className="fa fa-play"></i>

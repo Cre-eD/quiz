@@ -1,18 +1,8 @@
 /**
- * Authentication Setup for E2E Tests
+ * Optional manual OAuth verification helper.
  *
- * This script creates an authenticated session that can be reused across tests.
- *
- * Usage:
- * 1. Run once manually to create auth state:
- *    npx playwright test auth.setup.js --headed
- *
- * 2. Sign in manually when prompted
- *
- * 3. Auth state is saved to .auth/user.json
- *
- * 4. Other tests can reuse this auth:
- *    test.use({ storageState: '.auth/user.json' })
+ * Not part of default local deterministic suite.
+ * Use only when manually validating real production OAuth behavior.
  */
 
 import { test as setup } from '@playwright/test'
@@ -55,8 +45,7 @@ setup('authenticate', async ({ page }) => {
 
     console.log(`📁 Auth state saved to: ${authFile}`)
     console.log('')
-    console.log('You can now run authenticated tests with:')
-    console.log('  npm run test:e2e -- workflow-auth.spec.js')
+    console.log('Manual OAuth validation complete.')
 
   } catch (error) {
     console.error('❌ Authentication failed or timed out')

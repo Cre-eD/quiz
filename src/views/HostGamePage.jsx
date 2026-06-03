@@ -88,22 +88,28 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   if (gamePhase === 'final') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <span data-testid="host-game-phase" className="sr-only">{gamePhase}</span>
         <Confetti show={true} />
         <h2 className="text-5xl font-black gradient-text mb-8 animate-bounce-in">Final Results!</h2>
-        <div className="glass rounded-3xl p-8 w-full max-w-2xl mb-8">
+        <div className="glass rounded-3xl p-8 w-full max-w-2xl mb-8" data-testid="host-final-leaderboard">
           {leaderboard.slice(0, 5).map((player, idx) => {
             const playerStreak = streaks?.[player.uid] || 0
             return (
-              <div key={player.uid} className="flex items-center gap-4 p-4 border-b border-slate-800 last:border-0 animate-slide-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+              <div
+                key={player.uid}
+                data-testid={`host-final-row-${idx}`}
+                className="flex items-center gap-4 p-4 border-b border-slate-800 last:border-0 animate-slide-up"
+                style={{ animationDelay: `${idx * 0.1}s` }}
+              >
                 <span className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-400 text-black' : idx === 2 ? 'bg-amber-700' : 'bg-slate-800'}`}>
                   {idx === 0 ? <i className="fa fa-crown"></i> : idx + 1}
                 </span>
-                <span className="flex-grow text-left text-xl font-semibold flex items-center gap-2">
+                <span data-testid={`host-final-name-${idx}`} className="flex-grow text-left text-xl font-semibold flex items-center gap-2">
                   {player.name}
                   {playerStreak >= 2 && <i className="fa fa-fire text-orange-500" title={`${playerStreak} streak`}></i>}
                   <PlayerBadges uid={player.uid} />
                 </span>
-                <span className="text-2xl font-bold text-blue-400">{player.score}</span>
+                <span data-testid={`host-final-score-${idx}`} className="text-2xl font-bold text-blue-400">{player.score}</span>
               </div>
             )
           })}
@@ -118,6 +124,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
   if (gamePhase === 'results') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <span data-testid="host-game-phase" className="sr-only">{gamePhase}</span>
         <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
         <button
           onClick={abortGame}
@@ -144,19 +151,19 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
           </div>
         )}
 
-        <div className="glass rounded-3xl p-6 w-full max-w-2xl mb-8">
+        <div className="glass rounded-3xl p-6 w-full max-w-2xl mb-8" data-testid="host-results-leaderboard">
           <h3 className="text-xl font-bold mb-4"><i className="fa fa-trophy text-yellow-500 mr-2"></i>Leaderboard</h3>
           {leaderboard.slice(0, 5).map((player, idx) => {
             const playerStreak = streaks?.[player.uid] || 0
             return (
-              <div key={player.uid} className="flex items-center gap-4 p-3 border-b border-slate-800 last:border-0">
+              <div key={player.uid} data-testid={`host-results-row-${idx}`} className="flex items-center gap-4 p-3 border-b border-slate-800 last:border-0">
                 <span className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold">{idx + 1}</span>
-                <span className="flex-grow text-left font-semibold flex items-center gap-2">
+                <span data-testid={`host-results-name-${idx}`} className="flex-grow text-left font-semibold flex items-center gap-2">
                   {player.name}
                   {playerStreak >= 2 && <i className="fa fa-fire text-orange-500 animate-pulse" title={`${playerStreak} streak`}></i>}
                   <PlayerBadges uid={player.uid} />
                 </span>
-                <span className="font-bold text-blue-400">{player.score} pts</span>
+                <span data-testid={`host-results-score-${idx}`} className="font-bold text-blue-400">{player.score} pts</span>
               </div>
             )
           })}
@@ -178,6 +185,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
 
     return (
       <div className="min-h-screen flex flex-col p-6">
+        <span data-testid="host-game-phase" className="sr-only">{gamePhase}</span>
         <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
         <div className="flex justify-between items-center mb-4">
           <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>
@@ -222,6 +230,7 @@ export default function HostGamePage({ user, isAdmin, setView, session, gamePhas
 
   return (
     <div className="min-h-screen flex flex-col p-6">
+      <span data-testid="host-game-phase" className="sr-only">{gamePhase}</span>
       <div ref={reactionsContainerRef} className="fixed inset-0 pointer-events-none z-50 overflow-hidden" />
       <div className="flex justify-between items-center mb-4">
         <span className="text-slate-400">Question {currentQuestion + 1} of {session?.quiz?.questions?.length}</span>

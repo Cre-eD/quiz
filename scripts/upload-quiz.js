@@ -28,6 +28,11 @@ function getAccessToken() {
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       const tokens = config.tokens || config.user?.tokens;
+      // Prefer the cached access token if it exists and is not expired.
+      if (tokens?.access_token && tokens?.expires_at && tokens.expires_at > Date.now() + 60_000) {
+        accessToken = tokens.access_token;
+        return accessToken;
+      }
       if (tokens?.refresh_token) {
         // Exchange refresh token for access token
         const response = execSync(`curl -s -X POST "https://oauth2.googleapis.com/token" \
@@ -177,14 +182,7 @@ async function listQuizzes() {
 
   try {
     const token = getAccessToken();
-    const response = await fetch(`${FIRESTORE_URL}/quizzes?pageSize=100`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const data = await response.json();
-    const docs = data.documents || [];
+    const docs = await fetchAllQuizDocs(token);
 
     if (docs.length === 0) {
       console.log('  No quizzes found');
@@ -230,6 +228,79 @@ async function listQuizzes() {
   }
 }
 
+async function fetchAllQuizDocs(token) {
+  const docs = [];
+  let pageToken = null;
+  for (;;) {
+    const url = new URL(`${FIRESTORE_URL}/quizzes`);
+    url.searchParams.set('pageSize', '200');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const response = await fetch(url.toString(), {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    docs.push(...(data.documents || []));
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return docs;
+}
+
+async function deleteQuizById(token, quizId, { dryRun = false } = {}) {
+  if (dryRun) {
+    console.log(`  - (dry-run) delete ${quizId}`);
+    return { success: true, deleted: false };
+  }
+
+  const docUrl = `${FIRESTORE_URL}/quizzes/${quizId}`;
+  const response = await fetch(docUrl, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`HTTP ${response.status}: ${err}`);
+  }
+
+  console.log(`  - deleted ${quizId}`);
+  return { success: true, deleted: true };
+}
+
+async function purgeQuizzes(token, { course, minLevel, dryRun = false }) {
+  const docs = await fetchAllQuizDocs(token);
+
+  const targets = docs
+    .map((doc) => {
+      const fields = doc.fields || {};
+      const quizCourse = fields.course?.stringValue || 'default';
+      const level = parseInt(fields.level?.integerValue || '0', 10);
+      const id = doc.name.split('/').pop();
+      return { id, quizCourse, level };
+    })
+    .filter((d) => d.quizCourse === course && d.level >= minLevel)
+    .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id));
+
+  console.log(`\n🧹 Purging ${targets.length} quiz(es) from Firestore (course=${course}, level>=${minLevel})...\n`);
+  let ok = 0;
+  let failed = 0;
+  for (const t of targets) {
+    try {
+      await deleteQuizById(token, t.id, { dryRun });
+      ok++;
+    } catch (e) {
+      console.log(`  ! failed ${t.id}: ${e.message}`);
+      failed++;
+    }
+  }
+
+  console.log(`\n✅ Purge done: ${ok} ok, ${failed} failed`);
+  if (failed > 0) process.exitCode = 1;
+}
+
 // Main
 async function main() {
   const args = process.argv.slice(2);
@@ -242,6 +313,7 @@ Usage:
   npm run upload-quiz -- <files...>    Upload quiz files
   npm run upload-quiz -- --all         Upload all quizzes
   npm run upload-quiz -- --list        List quizzes in Firestore
+  npm run upload-quiz -- --purge-devops-from <N> [--dry-run]
 
 Setup:
   gcloud auth login                    Login with Google account
@@ -249,6 +321,7 @@ Setup:
 Examples:
   npm run upload-quiz -- quizzes/lec1_pre.json
   npm run upload-quiz -- --all
+  npm run upload-quiz -- --purge-devops-from 4
 `);
     process.exit(0);
   }
@@ -265,6 +338,19 @@ Examples:
   if (args.includes('--list')) {
     await listQuizzes();
     process.exit(0);
+  }
+
+  const purgeIdx = args.indexOf('--purge-devops-from');
+  if (purgeIdx !== -1) {
+    const n = Number(args[purgeIdx + 1]);
+    if (!Number.isFinite(n) || n < 1) {
+      console.error('❌ Invalid value for --purge-devops-from');
+      process.exit(1);
+    }
+    const token = getAccessToken();
+    const dryRun = args.includes('--dry-run');
+    await purgeQuizzes(token, { course: 'devops', minLevel: n, dryRun });
+    process.exit(process.exitCode ? 1 : 0);
   }
 
   // Get files

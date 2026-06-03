@@ -71,6 +71,7 @@ export function useAuth() {
     const unsubscribe = authService.onAuthStateChanged((firebaseUser) => {
       if (!mounted) return
       setUser(firebaseUser)
+      setIsAdmin(authService.isAdmin(firebaseUser))
       setLoading(false)
     })
 
@@ -78,6 +79,16 @@ export function useAuth() {
     const initAuth = async (retryCount = 0) => {
       const currentUser = authService.getCurrentUser()
       if (!currentUser && mounted) {
+        const isE2EAuthPending =
+          typeof window !== 'undefined' && window.__E2E_AUTH_PENDING__ === true
+
+        if (isE2EAuthPending) {
+          retryTimeoutId = setTimeout(() => {
+            if (mounted) initAuth(retryCount)
+          }, 100)
+          return
+        }
+
         try {
           await authService.signInAnonymously()
         } catch (error) {

@@ -38,9 +38,9 @@ else
   echo "✅ JS bundles found ($JS_COUNT)"
 fi
 
-# Check for emulator config leaks
+# Check for emulator and test-hook leaks
 echo ""
-echo "Checking for emulator configuration leaks..."
+echo "Checking for emulator/test-hook leaks..."
 
 if grep -r "localhost:9099" dist/ 2>/dev/null; then
   echo "❌ ERROR: Found 'localhost:9099' (Auth Emulator) in bundle"
@@ -49,11 +49,16 @@ else
   echo "✅ No Auth Emulator config found"
 fi
 
-if grep -r "localhost:8080" dist/ 2>/dev/null; then
-  echo "❌ ERROR: Found 'localhost:8080' (Firestore Emulator) in bundle"
+if grep -r "localhost:8081" dist/ 2>/dev/null; then
+  echo "❌ ERROR: Found 'localhost:8081' (Firestore Emulator) in bundle"
   ERRORS=$((ERRORS + 1))
 else
   echo "✅ No Firestore Emulator config found"
+fi
+
+if grep -r "localhost:8080" dist/ 2>/dev/null; then
+  echo "❌ ERROR: Found legacy Firestore emulator port 'localhost:8080' in bundle"
+  ERRORS=$((ERRORS + 1))
 fi
 
 if grep -r "VITE_USE_FIREBASE_EMULATOR.*true" dist/ 2>/dev/null; then
@@ -61,6 +66,20 @@ if grep -r "VITE_USE_FIREBASE_EMULATOR.*true" dist/ 2>/dev/null; then
   ERRORS=$((ERRORS + 1))
 else
   echo "✅ No emulator flag found"
+fi
+
+if grep -r "__E2E_AUTH__" dist/ 2>/dev/null; then
+  echo "❌ ERROR: Found '__E2E_AUTH__' test hook in production bundle"
+  ERRORS=$((ERRORS + 1))
+else
+  echo "✅ No E2E auth bridge found"
+fi
+
+if grep -r "VITE_E2E_MODE" dist/ 2>/dev/null; then
+  echo "❌ ERROR: Found 'VITE_E2E_MODE' marker in production bundle"
+  ERRORS=$((ERRORS + 1))
+else
+  echo "✅ No E2E mode marker found"
 fi
 
 # Check bundle size
@@ -88,7 +107,7 @@ if [ $ERRORS -eq 0 ]; then
   echo ""
   echo "Next steps:"
   echo "  npm run preview       # Test locally"
-  echo "  npm run deploy:prod   # Deploy to Firebase"
+  echo "  npm run deploy:safe   # Deploy with full checks"
   exit 0
 else
   echo "❌ Build validation failed with $ERRORS error(s)"

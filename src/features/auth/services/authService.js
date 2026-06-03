@@ -5,31 +5,22 @@
 
 import {
   signInAnonymously as firebaseSignInAnonymously,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged
 } from 'firebase/auth'
-import { auth, googleProvider, ADMIN_EMAIL, IS_TEST_MODE } from '@/lib/firebase/config'
+import { auth, googleProvider, ADMIN_EMAIL, E2E_ADMIN_PASSWORD, IS_E2E_MODE } from '@/lib/firebase/config'
 
 /**
  * Check if a user is an admin based on their email
- * In test mode (development only), any authenticated user is treated as admin
- * This allows E2E testing without OAuth complexity
  * @param {Object} user - Firebase user object
  * @returns {boolean} - True if user is admin, false otherwise
  */
 export function isAdmin(user) {
   if (!user || !user.email) return false
-
-  // Test mode: Grant admin access to any authenticated user (non-anonymous)
-  // SECURITY: Only works in DEV builds, completely removed from production
-  if (IS_TEST_MODE && !user.isAnonymous) {
-    console.log('🧪 Test mode: Granting admin access for E2E testing')
-    return true
-  }
-
   return user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
 }
 
@@ -112,12 +103,6 @@ export async function validateAdminAccess(user) {
     return { isAdmin: false, error: 'No user provided' }
   }
 
-  // Test mode: Allow any authenticated (non-anonymous) user
-  if (IS_TEST_MODE && !user.isAnonymous) {
-    console.log('🧪 Test mode: Allowing admin access for E2E testing')
-    return { isAdmin: true }
-  }
-
   const userEmail = (user.email || '').toLowerCase()
   const adminEmail = ADMIN_EMAIL.toLowerCase()
 
@@ -138,6 +123,40 @@ export async function validateAdminAccess(user) {
     return {
       isAdmin: false,
       error: 'Failed to validate admin access'
+    }
+  }
+}
+
+/**
+ * E2E-only admin login for local emulator tests.
+ * Signs out current user, logs in seeded admin email/password, and returns the admin user.
+ */
+export async function e2eLoginAdmin() {
+  if (!IS_E2E_MODE) {
+    throw new Error('E2E auth bridge is disabled outside local E2E mode')
+  }
+
+  if (typeof window !== 'undefined') {
+    window.__E2E_AUTH_PENDING__ = true
+  }
+
+  try {
+    await firebaseSignOut(auth).catch(() => {})
+
+    const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, E2E_ADMIN_PASSWORD)
+    const validation = await validateAdminAccess(result.user)
+
+    if (!validation.isAdmin) {
+      throw new Error(validation.error || 'Failed to validate admin user for E2E mode')
+    }
+
+    return result.user
+  } catch (error) {
+    console.error('E2E admin login error:', error)
+    throw error
+  } finally {
+    if (typeof window !== 'undefined') {
+      window.__E2E_AUTH_PENDING__ = false
     }
   }
 }
@@ -184,6 +203,7 @@ export const authService = {
   signInWithGoogle,
   handleRedirectResult,
   validateAdminAccess,
+  e2eLoginAdmin,
   signOut,
   onAuthStateChanged,
   getCurrentUser

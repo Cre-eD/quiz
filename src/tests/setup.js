@@ -15,7 +15,10 @@ vi.mock('@/lib/firebase/config', () => ({
   auth: {},
   db: {},
   googleProvider: {},
-  ADMIN_EMAIL: 'admin@test.com'
+  ADMIN_EMAIL: 'admin@test.com',
+  E2E_ADMIN_PASSWORD: 'e2e-password',
+  IS_E2E_MODE: false,
+  IS_EMULATOR_MODE: false
 }))
 
 // Mock environment variables

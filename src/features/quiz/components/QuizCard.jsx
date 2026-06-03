@@ -15,6 +15,7 @@ export default function QuizCard({ quiz, categoryConfig, onLaunch, onEdit, onDel
       <div className="flex gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
         <button
           onClick={() => onLaunch(quiz)}
+          data-testid="quiz-launch-btn"
           className="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-1.5 rounded-lg font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all"
         >
           <i className="fa fa-play mr-1"></i>Launch

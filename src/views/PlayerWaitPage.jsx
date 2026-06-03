@@ -1,6 +1,6 @@
 export default function PlayerWaitPage({ joinForm, onLeaveSession }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
+    <div data-testid="player-wait" className="min-h-screen flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-3xl animate-pulse-slow"></div>
       </div>
@@ -23,6 +23,7 @@ export default function PlayerWaitPage({ joinForm, onLeaveSession }) {
 
         <button
           onClick={onLeaveSession}
+          data-testid="player-leave-btn"
           className="mt-8 glass px-6 py-3 rounded-xl text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all"
         >
           <i className="fa fa-sign-out-alt mr-2"></i>Leave Session

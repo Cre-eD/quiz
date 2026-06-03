@@ -6,6 +6,16 @@ export default function ViewLeaderboardModal({
 }) {
   if (!leaderboard) return null
 
+  const toNonNegative = (value) => (Number.isFinite(value) && value > 0 ? value : 0)
+  const formatAverageCorrectTime = (player) => {
+    const totalCorrectAnswers = toNonNegative(player.totalCorrectAnswers)
+    const totalCorrectTimeMs = toNonNegative(player.totalCorrectTimeMs)
+    if (totalCorrectAnswers === 0) return 'avg n/a'
+    const avgMs = totalCorrectTimeMs / totalCorrectAnswers
+    if (avgMs >= 1000) return `${(avgMs / 1000).toFixed(2)}s avg`
+    return `${Math.round(avgMs)}ms avg`
+  }
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="glass p-8 rounded-3xl max-w-2xl w-full mx-4 animate-bounce-in max-h-[80vh] overflow-hidden flex flex-col">
@@ -22,15 +32,26 @@ export default function ViewLeaderboardModal({
           ) : (
             <div className="space-y-2">
               {players.map((player, idx) => (
-                <div key={player.key} className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
+                <div key={player.key} data-testid={`leaderboard-player-row-${idx}`} className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
                   <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-400 text-black' : idx === 2 ? 'bg-amber-700' : 'bg-slate-700'}`}>
                     {idx === 0 ? <i className="fa fa-crown"></i> : idx + 1}
                   </span>
                   <div className="flex-grow">
-                    <span className="font-semibold block">{player.displayName}</span>
+                    <span data-testid={`leaderboard-player-name-${idx}`} className="font-semibold block">{player.displayName}</span>
                     <span className="text-sm text-slate-500">{player.quizzesTaken} quiz{player.quizzesTaken !== 1 ? 'zes' : ''}</span>
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-400 mt-1">
+                      <span data-testid={`leaderboard-player-correct-${idx}`}>
+                        {toNonNegative(player.totalCorrectAnswers)} correct
+                      </span>
+                      <span data-testid={`leaderboard-player-avg-time-${idx}`}>
+                        {formatAverageCorrectTime(player)}
+                      </span>
+                      <span data-testid={`leaderboard-player-first-blood-${idx}`}>
+                        🎯 {toNonNegative(player.firstBloodWins)} first blood
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xl font-bold text-blue-400">{player.totalScore} pts</span>
+                  <span data-testid={`leaderboard-player-score-${idx}`} className="text-xl font-bold text-blue-400">{player.totalScore} pts</span>
                 </div>
               ))}
             </div>
