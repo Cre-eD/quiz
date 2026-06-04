@@ -7,10 +7,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { glob } from 'glob';
 import { execSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const PROJECT_ROOT = path.join(__dirname, '..');
 const QUIZZES_DIR = path.join(PROJECT_ROOT, 'quizzes');
 const PROJECT_ID = 'devops-quiz-2c930';
@@ -18,50 +20,87 @@ const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID
 
 let accessToken = null;
 
+// The Firebase CLI's built-in OAuth client. These are public "installed-app"
+// credentials (RFC 8252) shipped inside the open-source firebase-tools package
+// and used by every `firebase login` — they are NOT a project secret and are
+// useless without a user's own local refresh token. We source them at runtime
+// from the env override or the installed firebase-tools package rather than
+// hardcoding the literals into this repository.
+function firebaseCliOAuthClient() {
+  let id = process.env.FIREBASE_CLIENT_ID;
+  let secret = process.env.FIREBASE_CLIENT_SECRET;
+  if (id && secret) return { id, secret };
+  // Load firebase-tools' built-in public client from the installed package
+  // (local dep first, then the global install this project already relies on).
+  const strategies = [
+    () => require('firebase-tools/lib/api'),
+    () => require(path.join(execSync('npm root -g', { encoding: 'utf8' }).trim(), 'firebase-tools/lib/api'))
+  ];
+  for (const load of strategies) {
+    try {
+      const api = load();
+      id = id || api.clientId();
+      secret = secret || api.clientSecret();
+      if (id && secret) return { id, secret };
+    } catch {
+      // try next strategy
+    }
+  }
+  return null;
+}
+
 // Get access token from Firebase CLI
-function getAccessToken() {
+async function getAccessToken() {
   if (accessToken) return accessToken;
 
-  // Try Firebase CLI config first (preferred for this project)
+  // 1) Reuse the Firebase CLI's cached access token if still valid.
   try {
     const configPath = path.join(process.env.HOME || '', '.config', 'configstore', 'firebase-tools.json');
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       const tokens = config.tokens || config.user?.tokens;
-      // Prefer the cached access token if it exists and is not expired.
       if (tokens?.access_token && tokens?.expires_at && tokens.expires_at > Date.now() + 60_000) {
         accessToken = tokens.access_token;
         return accessToken;
       }
-      if (tokens?.refresh_token) {
-        // Exchange refresh token for access token
-        const response = execSync(`curl -s -X POST "https://oauth2.googleapis.com/token" \
-          -H "Content-Type: application/x-www-form-urlencoded" \
-          -d "client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com" \
-          -d "client_secret=j9iVZfS8kkCEFUPaAeJV0sAi" \
-          -d "refresh_token=${tokens.refresh_token}" \
-          -d "grant_type=refresh_token"`, { encoding: 'utf8' });
-        const tokenData = JSON.parse(response);
-        accessToken = tokenData.access_token;
-        return accessToken;
+      // 2) Refresh using firebase-tools' own OAuth client (no embedded secret).
+      const oauth = firebaseCliOAuthClient();
+      if (tokens?.refresh_token && oauth) {
+        const res = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: oauth.id,
+            client_secret: oauth.secret,
+            refresh_token: tokens.refresh_token,
+            grant_type: 'refresh_token'
+          })
+        });
+        if (res.ok) {
+          const tokenData = await res.json();
+          if (tokenData.access_token) {
+            accessToken = tokenData.access_token;
+            return accessToken;
+          }
+        }
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore and try gcloud
   }
 
-  // Fall back to gcloud
+  // 3) Fall back to gcloud Application Default Credentials.
   try {
     accessToken = execSync('gcloud auth print-access-token 2>/dev/null', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe']
     }).trim();
-    return accessToken;
+    if (accessToken) return accessToken;
   } catch {
     // Ignore
   }
 
-  throw new Error('Could not get access token. Run: firebase login');
+  throw new Error('Could not get access token. Run: firebase login (or set FIREBASE_CLIENT_ID/FIREBASE_CLIENT_SECRET, or gcloud auth login).');
 }
 
 // Generate quiz ID from filepath (includes course prefix)
@@ -144,7 +183,7 @@ async function uploadQuiz(filepath) {
       questionCount: quiz.questions.length
     };
 
-    const token = getAccessToken();
+    const token = await getAccessToken();
     const docUrl = `${FIRESTORE_URL}/quizzes/${quizId}`;
 
     const firestoreDoc = {
@@ -181,7 +220,7 @@ async function listQuizzes() {
   console.log('\n📋 Quizzes in Firestore:\n');
 
   try {
-    const token = getAccessToken();
+    const token = await getAccessToken();
     const docs = await fetchAllQuizDocs(token);
 
     if (docs.length === 0) {
@@ -328,7 +367,7 @@ Examples:
 
   // Test auth
   try {
-    getAccessToken();
+    await getAccessToken();
     console.log('🔐 Authenticated\n');
   } catch (err) {
     console.error('❌ ' + err.message);
@@ -347,7 +386,7 @@ Examples:
       console.error('❌ Invalid value for --purge-devops-from');
       process.exit(1);
     }
-    const token = getAccessToken();
+    const token = await getAccessToken();
     const dryRun = args.includes('--dry-run');
     await purgeQuizzes(token, { course: 'devops', minLevel: n, dryRun });
     process.exit(process.exitCode ? 1 : 0);
